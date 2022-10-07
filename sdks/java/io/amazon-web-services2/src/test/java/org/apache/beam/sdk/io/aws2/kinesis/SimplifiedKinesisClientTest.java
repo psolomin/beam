@@ -50,6 +50,7 @@ import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
 import software.amazon.awssdk.services.cloudwatch.model.Datapoint;
 import software.amazon.awssdk.services.cloudwatch.model.GetMetricStatisticsRequest;
 import software.amazon.awssdk.services.cloudwatch.model.GetMetricStatisticsResponse;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryRequest;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryResponse;
@@ -83,12 +84,14 @@ public class SimplifiedKinesisClientTest {
   private static final Instant CURRENT_TIMESTAMP = Instant.parse("2000-01-01T15:00:00.000Z");
 
   @Mock private KinesisClient kinesis;
+  @Mock private KinesisAsyncClient kinesisAsync;
   @Mock private CloudWatchClient cloudWatch;
   private SimplifiedKinesisClient underTest;
 
   @Before
   public void init() {
-    underTest = new SimplifiedKinesisClient(() -> kinesis, () -> cloudWatch, null);
+    underTest =
+        new SimplifiedKinesisClient(() -> kinesis, () -> kinesisAsync, () -> cloudWatch, null);
   }
 
   @After
