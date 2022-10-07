@@ -48,7 +48,10 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
   private final CheckpointGenerator checkpointGenerator;
 
   KinesisSource(Read read) {
-    this(read, new DynamicCheckpointGenerator(read.getStreamName(), read.getInitialPosition()));
+    this(
+        read,
+        new DynamicCheckpointGenerator(
+            read.getStreamName(), read.getConsumerArn(), read.getInitialPosition()));
   }
 
   private KinesisSource(Read spec, CheckpointGenerator initialCheckpoint) {

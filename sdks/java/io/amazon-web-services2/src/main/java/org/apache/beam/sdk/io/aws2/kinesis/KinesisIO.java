@@ -281,6 +281,8 @@ public final class KinesisIO {
 
     abstract @Nullable String getStreamName();
 
+    abstract @Nullable String getConsumerArn();
+
     abstract @Nullable StartingPoint getInitialPosition();
 
     abstract @Nullable ClientConfiguration getClientConfiguration();
@@ -308,6 +310,8 @@ public final class KinesisIO {
 
       abstract Builder setStreamName(String streamName);
 
+      abstract Builder setConsumerArn(String consumerArn);
+
       abstract Builder setInitialPosition(StartingPoint startingPoint);
 
       abstract Builder setClientConfiguration(ClientConfiguration config);
@@ -334,6 +338,11 @@ public final class KinesisIO {
     /** Specify reading from streamName. */
     public Read withStreamName(String streamName) {
       return toBuilder().setStreamName(streamName).build();
+    }
+
+    /** Specify reading with Enhanced Fan-Out via registered consumer ARN. */
+    public Read withConsumerArn(String consumerArn) {
+      return toBuilder().setConsumerArn(consumerArn).build();
     }
 
     /** Specify reading from some initial position in stream. */

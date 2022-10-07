@@ -31,10 +31,13 @@ class DynamicCheckpointGenerator implements CheckpointGenerator {
 
   private static final Logger LOG = LoggerFactory.getLogger(DynamicCheckpointGenerator.class);
   private final String streamName;
+  private final String consumerArn;
   private final StartingPoint startingPoint;
 
-  public DynamicCheckpointGenerator(String streamName, StartingPoint startingPoint) {
+  public DynamicCheckpointGenerator(
+      String streamName, String consumerArn, StartingPoint startingPoint) {
     this.streamName = streamName;
+    this.consumerArn = consumerArn;
     this.startingPoint = startingPoint;
   }
 
@@ -49,7 +52,9 @@ class DynamicCheckpointGenerator implements CheckpointGenerator {
         startingPoint.getTimestamp());
     return new KinesisReaderCheckpoint(
         streamShards.stream()
-            .map(shard -> new ShardCheckpoint(streamName, shard.shardId(), startingPoint))
+            .map(
+                shard ->
+                    new ShardCheckpoint(streamName, consumerArn, shard.shardId(), startingPoint))
             .collect(Collectors.toList()));
   }
 
