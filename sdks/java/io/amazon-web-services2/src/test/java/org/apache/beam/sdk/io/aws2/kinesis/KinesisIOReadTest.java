@@ -63,6 +63,7 @@ import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchClientBuilder;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.kinesis.KinesisClientBuilder;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
@@ -266,6 +267,11 @@ public class KinesisIOReadTest {
     @Override
     public KinesisClient getKinesisClient() {
       return get();
+    }
+
+    @Override
+    public KinesisAsyncClient getKinesisAsyncClient() {
+      return null;
     }
 
     @Override

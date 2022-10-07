@@ -22,11 +22,15 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Prec
 import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AFTER_SEQUENCE_NUMBER;
 import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AT_SEQUENCE_NUMBER;
 import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AT_TIMESTAMP;
+import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.LATEST;
 
 import java.io.Serializable;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import org.joda.time.Instant;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -153,6 +157,25 @@ class ShardCheckpoint implements Serializable {
 
   private boolean checkpointIsInTheMiddleOfAUserRecord() {
     return shardIteratorType == AFTER_SEQUENCE_NUMBER && subSequenceNumber != null;
+  }
+
+  public CompletableFuture<Void> subscribeToShard(
+      boolean resubscribe,
+      SimplifiedKinesisClient kinesisClient,
+      final SubscribeToShardResponseHandler.Visitor visitor,
+      final Consumer<Throwable> onError)
+      throws TransientKinesisException {
+    String consumerArn = "foo";
+    if (resubscribe) {
+      return kinesisClient.subscribeToShard(
+          consumerArn, shardId, LATEST, null, null, visitor, onError);
+    }
+    if (checkpointIsInTheMiddleOfAUserRecord()) {
+      return kinesisClient.subscribeToShard(
+          consumerArn, shardId, AT_SEQUENCE_NUMBER, sequenceNumber, null, visitor, onError);
+    }
+    return kinesisClient.subscribeToShard(
+        consumerArn, shardId, shardIteratorType, sequenceNumber, timestamp, visitor, onError);
   }
 
   /**

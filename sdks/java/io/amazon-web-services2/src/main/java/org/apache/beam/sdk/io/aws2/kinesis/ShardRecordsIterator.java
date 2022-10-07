@@ -21,12 +21,17 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Prec
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 import software.amazon.kinesis.common.InitialPositionInStream;
 
 /**
@@ -48,6 +53,8 @@ class ShardRecordsIterator {
   private final WatermarkPolicy latestRecordTimestampPolicy =
       WatermarkPolicyFactory.withArrivalTimePolicy().createWatermarkPolicy();
   private String shardIterator;
+  private boolean resubscribe;
+  private AtomicLong millisBehindLatest = new AtomicLong(Long.MAX_VALUE);
 
   ShardRecordsIterator(
       ShardCheckpoint initialCheckpoint,
@@ -92,6 +99,32 @@ class ShardRecordsIterator {
     return filteredRecords;
   }
 
+  void subscribeToShard(Consumer<KinesisRecord> consumer) throws TransientKinesisException {
+    SubscribeToShardResponseHandler.Visitor visitor =
+        new SubscribeToShardResponseHandler.Visitor() {
+          @Override
+          public void visit(SubscribeToShardEvent event) {
+            LOG.debug("Received subscribe to shard event " + event);
+            millisBehindLatest.set(event.millisBehindLatest());
+            if (!event.records().isEmpty()) {
+              List<KinesisRecord> kinesisRecords =
+                  SimplifiedKinesisClient.deaggregate(event.records()).stream()
+                      .map(r -> new KinesisRecord(r, streamName, shardId))
+                      .collect(Collectors.toList());
+              filter.apply(kinesisRecords, checkpoint.get()).forEach(consumer);
+            }
+          }
+        };
+    checkpoint
+        .get()
+        .subscribeToShard(
+            resubscribe,
+            kinesis,
+            visitor,
+            e -> LOG.error("Error during stream - " + e.getMessage()))
+        .join();
+  }
+
   private GetKinesisRecordsResult fetchRecords() throws TransientKinesisException {
     try {
       GetKinesisRecordsResult response = kinesis.getRecords(shardIterator, streamName, shardId);
@@ -116,6 +149,7 @@ class ShardRecordsIterator {
     checkpoint.set(checkpoint.get().moveAfter(record));
     watermarkPolicy.update(record);
     latestRecordTimestampPolicy.update(record);
+    resubscribe = true;
   }
 
   Instant getShardWatermark() {
