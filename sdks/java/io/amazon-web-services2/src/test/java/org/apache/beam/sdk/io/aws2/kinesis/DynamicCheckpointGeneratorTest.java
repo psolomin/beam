@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 import org.junit.Before;
 import org.junit.Test;
@@ -48,7 +49,7 @@ public class DynamicCheckpointGeneratorTest {
   public void shouldMapAllShardsToCheckpoints() throws Exception {
     List<Shard> shards = ImmutableList.of(shard1, shard2, shard3);
     String streamName = "stream";
-    String consumerArn = "consumer-01:123";
+    Optional<String> consumerArn = Optional.of("consumer-01:123");
     StartingPoint startingPoint = new StartingPoint(InitialPositionInStream.LATEST);
     when(kinesisClient.listShardsAtPoint(streamName, startingPoint)).thenReturn(shards);
     DynamicCheckpointGenerator underTest =

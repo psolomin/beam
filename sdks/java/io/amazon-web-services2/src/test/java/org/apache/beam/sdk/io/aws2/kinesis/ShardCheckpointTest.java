@@ -30,6 +30,7 @@ import static software.amazon.kinesis.common.InitialPositionInStream.LATEST;
 import static software.amazon.kinesis.common.InitialPositionInStream.TRIM_HORIZON;
 
 import java.io.IOException;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import org.joda.time.DateTime;
 import org.joda.time.Instant;
 import org.junit.Before;
@@ -47,7 +48,7 @@ public class ShardCheckpointTest {
   private static final String AT_SEQUENCE_SHARD_IT = "AT_SEQUENCE_SHARD_IT";
   private static final String AFTER_SEQUENCE_SHARD_IT = "AFTER_SEQUENCE_SHARD_IT";
   private static final String STREAM_NAME = "STREAM";
-  private static final String CONSUMER_ARN = "CONSUMER_ARN";
+  private static final Optional<String> CONSUMER_ARN = Optional.of("CONSUMER_ARN");
   private static final String SHARD_ID = "SHARD_ID";
   @Mock private SimplifiedKinesisClient client;
 
@@ -83,13 +84,15 @@ public class ShardCheckpointTest {
 
   @Test
   public void testComparisonWithExtendedSequenceNumber() {
+    String streamName = "";
+    Optional<String> consumerArn = Optional.of("");
     assertThat(
-            new ShardCheckpoint("", "", "", new StartingPoint(LATEST))
+            new ShardCheckpoint(streamName, consumerArn, "", new StartingPoint(LATEST))
                 .isBeforeOrAt(recordWith(new ExtendedSequenceNumber("100", 0L))))
         .isTrue();
 
     assertThat(
-            new ShardCheckpoint("", "", "", new StartingPoint(TRIM_HORIZON))
+            new ShardCheckpoint(streamName, consumerArn, "", new StartingPoint(TRIM_HORIZON))
                 .isBeforeOrAt(recordWith(new ExtendedSequenceNumber("100", 0L))))
         .isTrue();
 
