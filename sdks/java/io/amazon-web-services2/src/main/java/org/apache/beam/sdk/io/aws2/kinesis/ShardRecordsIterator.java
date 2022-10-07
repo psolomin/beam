@@ -21,11 +21,11 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Prec
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,7 +76,7 @@ class ShardRecordsIterator {
     this.filter = checkNotNull(filter, "filter");
     this.kinesis = checkNotNull(simplifiedKinesisClient, "simplifiedKinesisClient");
     this.streamName = initialCheckpoint.getStreamName();
-    this.consumerArn = Optional.ofNullable(initialCheckpoint.getConsumerArn());
+    this.consumerArn = initialCheckpoint.getConsumerArn();
     this.shardId = initialCheckpoint.getShardId();
     this.shardIterator = initialCheckpoint.getShardIterator(kinesis);
     this.watermarkPolicy = watermarkPolicyFactory.createWatermarkPolicy();
@@ -107,7 +107,7 @@ class ShardRecordsIterator {
   }
 
   String getConsumerInfo() {
-    return consumerArn.orElse("N/A");
+    return consumerArn.or("N/A");
   }
 
   void subscribeToShard(Consumer<KinesisRecord> consumer) throws TransientKinesisException {
@@ -187,7 +187,7 @@ class ShardRecordsIterator {
         ShardCheckpoint shardCheckpoint =
             new ShardCheckpoint(
                 streamName,
-                consumerArn.orElse(null),
+                consumerArn,
                 shard.shardId(),
                 new StartingPoint(InitialPositionInStream.TRIM_HORIZON));
         successiveShardRecordIterators.add(

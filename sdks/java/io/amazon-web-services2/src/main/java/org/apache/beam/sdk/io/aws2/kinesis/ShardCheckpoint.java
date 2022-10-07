@@ -27,6 +27,7 @@ import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.LA
 import java.io.Serializable;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import org.joda.time.Instant;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
@@ -52,7 +53,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 class ShardCheckpoint implements Serializable {
 
   private final String streamName;
-  private final String consumerArn;
+  private final Optional<String> consumerArn;
   private final String shardId;
   private final String sequenceNumber;
   private final ShardIteratorType shardIteratorType;
@@ -60,7 +61,10 @@ class ShardCheckpoint implements Serializable {
   private final Instant timestamp;
 
   public ShardCheckpoint(
-      String streamName, String consumerArn, String shardId, StartingPoint startingPoint) {
+      String streamName,
+      Optional<String> consumerArn,
+      String shardId,
+      StartingPoint startingPoint) {
     this(
         streamName,
         consumerArn,
@@ -71,7 +75,7 @@ class ShardCheckpoint implements Serializable {
 
   public ShardCheckpoint(
       String streamName,
-      String consumerArn,
+      Optional<String> consumerArn,
       String shardId,
       ShardIteratorType shardIteratorType,
       Instant timestamp) {
@@ -80,7 +84,7 @@ class ShardCheckpoint implements Serializable {
 
   public ShardCheckpoint(
       String streamName,
-      String consumerArn,
+      Optional<String> consumerArn,
       String shardId,
       ShardIteratorType shardIteratorType,
       String sequenceNumber,
@@ -97,7 +101,7 @@ class ShardCheckpoint implements Serializable {
 
   private ShardCheckpoint(
       String streamName,
-      String consumerArn,
+      Optional<String> consumerArn,
       String shardId,
       ShardIteratorType shardIteratorType,
       String sequenceNumber,
@@ -105,7 +109,7 @@ class ShardCheckpoint implements Serializable {
       Instant timestamp) {
     this.shardIteratorType = checkNotNull(shardIteratorType, "shardIteratorType");
     this.streamName = checkNotNull(streamName, "streamName");
-    this.consumerArn = consumerArn;
+    this.consumerArn = checkNotNull(consumerArn);
     this.shardId = checkNotNull(shardId, "shardId");
     if (shardIteratorType == AT_SEQUENCE_NUMBER || shardIteratorType == AFTER_SEQUENCE_NUMBER) {
       checkNotNull(
@@ -184,14 +188,14 @@ class ShardCheckpoint implements Serializable {
       throws TransientKinesisException {
     if (resubscribe) {
       return kinesisClient.subscribeToShard(
-          consumerArn, shardId, LATEST, null, null, visitor, onError);
+          consumerArn.get(), shardId, LATEST, null, null, visitor, onError);
     }
     if (checkpointIsInTheMiddleOfAUserRecord()) {
       return kinesisClient.subscribeToShard(
-          consumerArn, shardId, AT_SEQUENCE_NUMBER, sequenceNumber, null, visitor, onError);
+          consumerArn.get(), shardId, AT_SEQUENCE_NUMBER, sequenceNumber, null, visitor, onError);
     }
     return kinesisClient.subscribeToShard(
-        consumerArn, shardId, shardIteratorType, sequenceNumber, timestamp, visitor, onError);
+        consumerArn.get(), shardId, shardIteratorType, sequenceNumber, timestamp, visitor, onError);
   }
 
   /**
@@ -214,7 +218,7 @@ class ShardCheckpoint implements Serializable {
     return streamName;
   }
 
-  public String getConsumerArn() {
+  public Optional<String> getConsumerArn() {
     return consumerArn;
   }
 

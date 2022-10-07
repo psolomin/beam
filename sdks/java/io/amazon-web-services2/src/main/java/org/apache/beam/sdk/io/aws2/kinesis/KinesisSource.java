@@ -18,6 +18,7 @@
 package org.apache.beam.sdk.io.aws2.kinesis;
 
 import static org.apache.beam.sdk.io.aws2.common.ClientBuilderFactory.buildClient;
+import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional.fromNullable;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.Lists.newArrayList;
 
@@ -51,7 +52,7 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
     this(
         read,
         new DynamicCheckpointGenerator(
-            read.getStreamName(), read.getConsumerArn(), read.getInitialPosition()));
+            read.getStreamName(), fromNullable(read.getConsumerArn()), read.getInitialPosition()));
   }
 
   private KinesisSource(Read spec, CheckpointGenerator initialCheckpoint) {
