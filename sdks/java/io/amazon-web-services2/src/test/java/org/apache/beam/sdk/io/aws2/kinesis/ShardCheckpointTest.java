@@ -47,6 +47,7 @@ public class ShardCheckpointTest {
   private static final String AT_SEQUENCE_SHARD_IT = "AT_SEQUENCE_SHARD_IT";
   private static final String AFTER_SEQUENCE_SHARD_IT = "AFTER_SEQUENCE_SHARD_IT";
   private static final String STREAM_NAME = "STREAM";
+  private static final String CONSUMER_ARN = "CONSUMER_ARN";
   private static final String SHARD_ID = "SHARD_ID";
   @Mock private SimplifiedKinesisClient client;
 
@@ -83,12 +84,12 @@ public class ShardCheckpointTest {
   @Test
   public void testComparisonWithExtendedSequenceNumber() {
     assertThat(
-            new ShardCheckpoint("", "", new StartingPoint(LATEST))
+            new ShardCheckpoint("", "", "", new StartingPoint(LATEST))
                 .isBeforeOrAt(recordWith(new ExtendedSequenceNumber("100", 0L))))
         .isTrue();
 
     assertThat(
-            new ShardCheckpoint("", "", new StartingPoint(TRIM_HORIZON))
+            new ShardCheckpoint("", "", "", new StartingPoint(TRIM_HORIZON))
                 .isBeforeOrAt(recordWith(new ExtendedSequenceNumber("100", 0L))))
         .isTrue();
 
@@ -147,7 +148,7 @@ public class ShardCheckpointTest {
   private ShardCheckpoint checkpoint(
       ShardIteratorType iteratorType, String sequenceNumber, Long subSequenceNumber) {
     return new ShardCheckpoint(
-        STREAM_NAME, SHARD_ID, iteratorType, sequenceNumber, subSequenceNumber);
+        STREAM_NAME, CONSUMER_ARN, SHARD_ID, iteratorType, sequenceNumber, subSequenceNumber);
   }
 
   private KinesisRecord recordWith(Instant approximateArrivalTimestamp) {
@@ -157,6 +158,6 @@ public class ShardCheckpointTest {
   }
 
   private ShardCheckpoint checkpoint(ShardIteratorType iteratorType, Instant timestamp) {
-    return new ShardCheckpoint(STREAM_NAME, SHARD_ID, iteratorType, timestamp);
+    return new ShardCheckpoint(STREAM_NAME, CONSUMER_ARN, SHARD_ID, iteratorType, timestamp);
   }
 }

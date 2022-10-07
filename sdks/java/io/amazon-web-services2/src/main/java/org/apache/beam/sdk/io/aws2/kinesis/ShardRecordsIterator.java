@@ -21,6 +21,7 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Prec
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -46,6 +47,7 @@ class ShardRecordsIterator {
   private final SimplifiedKinesisClient kinesis;
   private final RecordFilter filter;
   private final String streamName;
+  private final Optional<String> consumerArn;
   private final String shardId;
   private final AtomicReference<ShardCheckpoint> checkpoint;
   private final WatermarkPolicy watermarkPolicy;
@@ -74,6 +76,7 @@ class ShardRecordsIterator {
     this.filter = checkNotNull(filter, "filter");
     this.kinesis = checkNotNull(simplifiedKinesisClient, "simplifiedKinesisClient");
     this.streamName = initialCheckpoint.getStreamName();
+    this.consumerArn = Optional.ofNullable(initialCheckpoint.getConsumerArn());
     this.shardId = initialCheckpoint.getShardId();
     this.shardIterator = initialCheckpoint.getShardIterator(kinesis);
     this.watermarkPolicy = watermarkPolicyFactory.createWatermarkPolicy();
@@ -97,6 +100,14 @@ class ShardRecordsIterator {
 
     List<KinesisRecord> filteredRecords = filter.apply(response.getRecords(), checkpoint.get());
     return filteredRecords;
+  }
+
+  boolean hasConsumer() {
+    return consumerArn.isPresent();
+  }
+
+  String getConsumerInfo() {
+    return consumerArn.orElse("N/A");
   }
 
   void subscribeToShard(Consumer<KinesisRecord> consumer) throws TransientKinesisException {
@@ -176,6 +187,7 @@ class ShardRecordsIterator {
         ShardCheckpoint shardCheckpoint =
             new ShardCheckpoint(
                 streamName,
+                consumerArn.orElse(null),
                 shard.shardId(),
                 new StartingPoint(InitialPositionInStream.TRIM_HORIZON));
         successiveShardRecordIterators.add(
