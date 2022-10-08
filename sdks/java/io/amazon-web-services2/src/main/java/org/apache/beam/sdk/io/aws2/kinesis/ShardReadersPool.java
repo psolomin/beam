@@ -151,6 +151,7 @@ class ShardReadersPool {
         LOG.warn("Transient exception occurred.", e);
       } catch (Throwable e) {
         LOG.error("Unexpected exception occurred", e);
+        poolOpened.set(false);
       }
     }
     LOG.info("Kinesis Shard subscribe loop has finished");
