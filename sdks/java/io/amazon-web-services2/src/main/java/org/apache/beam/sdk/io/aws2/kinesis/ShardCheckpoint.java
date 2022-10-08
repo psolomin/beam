@@ -184,8 +184,7 @@ class ShardCheckpoint implements Serializable {
       boolean resubscribe,
       SimplifiedKinesisClient kinesisClient,
       final SubscribeToShardResponseHandler.Visitor visitor,
-      final Consumer<Throwable> onError)
-      throws TransientKinesisException {
+      final Consumer<Throwable> onError) {
     if (resubscribe) {
       return kinesisClient.subscribeToShard(
           consumerArn.get(), shardId, LATEST, null, null, visitor, onError);

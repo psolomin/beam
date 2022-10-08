@@ -17,6 +17,7 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis;
 
+import static org.apache.beam.sdk.io.aws2.kinesis.ErrorsUtils.wrapExceptions;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
 import java.util.ArrayList;
@@ -126,14 +127,17 @@ class ShardRecordsIterator {
             }
           }
         };
-    checkpoint
-        .get()
-        .subscribeToShard(
-            resubscribe,
-            kinesis,
-            visitor,
-            e -> LOG.error("Error during stream - " + e.getMessage()))
-        .join();
+
+    wrapExceptions(
+        () ->
+            checkpoint
+                .get()
+                .subscribeToShard(
+                    resubscribe,
+                    kinesis,
+                    visitor,
+                    e -> LOG.error("Error during stream - " + e.getMessage()))
+                .join());
   }
 
   private GetKinesisRecordsResult fetchRecords() throws TransientKinesisException {
