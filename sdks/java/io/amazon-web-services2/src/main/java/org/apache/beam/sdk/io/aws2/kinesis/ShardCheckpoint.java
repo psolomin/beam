@@ -26,6 +26,7 @@ import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.LA
 
 import java.io.Serializable;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import org.joda.time.Instant;
@@ -181,11 +182,11 @@ class ShardCheckpoint implements Serializable {
   }
 
   public CompletableFuture<Void> subscribeToShard(
-      boolean resubscribe,
+      AtomicBoolean resubscribe,
       SimplifiedKinesisClient kinesisClient,
       final SubscribeToShardResponseHandler.Visitor visitor,
       final Consumer<Throwable> onError) {
-    if (resubscribe) {
+    if (resubscribe.get()) {
       return kinesisClient.subscribeToShard(
           consumerArn.get(), shardId, LATEST, null, null, visitor, onError);
     }

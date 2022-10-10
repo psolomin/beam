@@ -22,6 +22,7 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Prec
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -56,7 +57,7 @@ class ShardRecordsIterator {
   private final WatermarkPolicy latestRecordTimestampPolicy =
       WatermarkPolicyFactory.withArrivalTimePolicy().createWatermarkPolicy();
   private String shardIterator;
-  private boolean resubscribe;
+  private AtomicBoolean resubscribe = new AtomicBoolean(true);
   private AtomicLong millisBehindLatest = new AtomicLong(Long.MAX_VALUE);
 
   ShardRecordsIterator(
@@ -112,22 +113,6 @@ class ShardRecordsIterator {
   }
 
   void subscribeToShard(Consumer<KinesisRecord> consumer) throws TransientKinesisException {
-    SubscribeToShardResponseHandler.Visitor visitor =
-        new SubscribeToShardResponseHandler.Visitor() {
-          @Override
-          public void visit(SubscribeToShardEvent event) {
-            LOG.debug("Received subscribe to shard event " + event);
-            millisBehindLatest.set(event.millisBehindLatest());
-            if (!event.records().isEmpty()) {
-              List<KinesisRecord> kinesisRecords =
-                  SimplifiedKinesisClient.deaggregate(event.records()).stream()
-                      .map(r -> new KinesisRecord(r, streamName, shardId))
-                      .collect(Collectors.toList());
-              filter.apply(kinesisRecords, checkpoint.get()).forEach(consumer);
-            }
-          }
-        };
-
     wrapExceptions(
         () ->
             checkpoint
@@ -135,7 +120,7 @@ class ShardRecordsIterator {
                 .subscribeToShard(
                     resubscribe,
                     kinesis,
-                    visitor,
+                    createVisitor(consumer),
                     e -> LOG.error("Error during stream - " + e.getMessage()))
                 .join());
   }
@@ -164,7 +149,7 @@ class ShardRecordsIterator {
     checkpoint.set(checkpoint.get().moveAfter(record));
     watermarkPolicy.update(record);
     latestRecordTimestampPolicy.update(record);
-    resubscribe = true;
+    resubscribe.set(true);
   }
 
   Instant getShardWatermark() {
@@ -199,5 +184,27 @@ class ShardRecordsIterator {
       }
     }
     return successiveShardRecordIterators;
+  }
+
+  SubscribeToShardResponseHandler.Visitor createVisitor(Consumer<KinesisRecord> consumer) {
+    return new SubscribeToShardResponseHandler.Visitor() {
+      @Override
+      public void visit(SubscribeToShardEvent event) {
+        LOG.debug("Received subscribe to shard event {}", event);
+        if (event.continuationSequenceNumber() == null) {
+          LOG.info(
+              "Shard {} is split into {}. Will not resubscribe.", shardId, event.childShards());
+          resubscribe.set(false);
+        }
+        if (!event.records().isEmpty()) {
+          millisBehindLatest.set(event.millisBehindLatest());
+          List<KinesisRecord> kinesisRecords =
+              SimplifiedKinesisClient.deaggregate(event.records()).stream()
+                  .map(r -> new KinesisRecord(r, streamName, shardId))
+                  .collect(Collectors.toList());
+          filter.apply(kinesisRecords, checkpoint.get()).forEach(consumer);
+        }
+      }
+    };
   }
 }

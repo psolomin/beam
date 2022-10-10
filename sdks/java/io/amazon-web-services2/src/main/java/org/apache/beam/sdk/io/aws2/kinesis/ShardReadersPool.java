@@ -160,8 +160,8 @@ class ShardReadersPool {
   private void putRecord(KinesisRecord kinesisRecord) {
     try {
       LOG.debug("Received record: {}", kinesisRecord);
-      recordsQueue.put(kinesisRecord);
-      numberOfRecordsInAQueueByShard.get(kinesisRecord.getShardId()).incrementAndGet();
+      if (recordsQueue.offer(kinesisRecord, QUEUE_OFFER_TIMEOUT_MS, MILLISECONDS))
+        numberOfRecordsInAQueueByShard.get(kinesisRecord.getShardId()).incrementAndGet();
     } catch (InterruptedException e) {
       LOG.warn("Thread was interrupted, finishing the read loop", e);
       Thread.currentThread().interrupt();
