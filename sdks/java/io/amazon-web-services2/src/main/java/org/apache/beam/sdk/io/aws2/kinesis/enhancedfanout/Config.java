@@ -19,29 +19,32 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import java.time.Instant;
 import java.util.Optional;
+import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
+import software.amazon.kinesis.common.InitialPositionInStream;
 
 public class Config {
   private final String streamName;
   private final String consumerArn;
-  private final StartType startType;
+  private final StartingPoint startingPoint;
   private final Optional<Instant> startTimestamp;
 
   public Config(
       String streamName,
       String consumerArn,
-      StartType startType,
+      StartingPoint startingPoint,
       Optional<Instant> startTimestamp) {
-    if (startType.equals(StartType.AT_TIMESTAMP) && startTimestamp.isEmpty())
+    if (startingPoint.getPosition().equals(InitialPositionInStream.AT_TIMESTAMP)
+        && !startTimestamp.isPresent())
       throw new IllegalStateException("Timestamp must not be empty");
 
     this.streamName = streamName;
     this.consumerArn = consumerArn;
-    this.startType = startType;
+    this.startingPoint = startingPoint;
     this.startTimestamp = startTimestamp;
   }
 
-  public Config(String streamName, String consumerArn, StartType startType) {
-    this(streamName, consumerArn, startType, Optional.empty());
+  public Config(String streamName, String consumerArn, StartingPoint startingPoint) {
+    this(streamName, consumerArn, startingPoint, Optional.empty());
   }
 
   public String getStreamName() {
@@ -52,8 +55,8 @@ public class Config {
     return consumerArn;
   }
 
-  public StartType getStartType() {
-    return startType;
+  public StartingPoint getStartingPoint() {
+    return startingPoint;
   }
 
   public Instant getStartTimestamp() {

@@ -42,7 +42,7 @@ public class ShardsProgressHistory {
   }
 
   private static ShardFilter buildFilter(Config config) {
-    switch (config.getStartType()) {
+    switch (config.getStartingPoint().getPosition()) {
       case LATEST:
         return ShardFilter.builder().type(ShardFilterType.AT_LATEST).build();
       case AT_TIMESTAMP:

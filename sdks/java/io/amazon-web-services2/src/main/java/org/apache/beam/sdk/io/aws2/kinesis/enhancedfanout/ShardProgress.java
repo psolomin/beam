@@ -68,7 +68,7 @@ class ShardProgress {
   }
 
   private StartingPosition buildInitialStartingPosition() {
-    switch (config.getStartType()) {
+    switch (config.getStartingPoint().getPosition()) {
       case LATEST:
         return StartingPosition.builder().type(ShardIteratorType.LATEST).build();
 
