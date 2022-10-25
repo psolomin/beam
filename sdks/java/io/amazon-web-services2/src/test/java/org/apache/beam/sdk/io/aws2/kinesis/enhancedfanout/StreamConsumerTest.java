@@ -23,6 +23,7 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.List;
 import java.util.stream.Stream;
+import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.KinesisClientBuilderStub;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.SimplifiedKinesisAsyncClientStubBehaviours;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.InMemCollectionRecordsSink;
@@ -34,12 +35,14 @@ import org.junit.runners.JUnit4;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.awssdk.services.kinesis.model.StartingPosition;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
+import software.amazon.kinesis.common.InitialPositionInStream;
 
 @RunWith(JUnit4.class)
 public class StreamConsumerTest {
   private static final String STREAM_NAME = SimplifiedKinesisAsyncClientStubBehaviours.STREAM_NAME;
   private static final String CONSUMER_ARN =
       SimplifiedKinesisAsyncClientStubBehaviours.CONSUMER_ARN;
+  private final StartingPoint startingPoint = new StartingPoint(InitialPositionInStream.LATEST);
   private StreamConsumer consumer;
 
   @After
@@ -51,7 +54,7 @@ public class StreamConsumerTest {
 
   @Test
   public void consumesAllEventsFromMultipleShards() throws InterruptedException {
-    Config config = new Config(STREAM_NAME, CONSUMER_ARN, StartType.LATEST);
+    Config config = new Config(STREAM_NAME, CONSUMER_ARN, startingPoint);
     KinesisClientBuilderStub builder =
         SimplifiedKinesisAsyncClientStubBehaviours.twoShardsWithRecords();
 
@@ -80,7 +83,7 @@ public class StreamConsumerTest {
 
   @Test
   public void consumesAllEventsFromChildShards() throws InterruptedException {
-    Config config = new Config(STREAM_NAME, CONSUMER_ARN, StartType.LATEST);
+    Config config = new Config(STREAM_NAME, CONSUMER_ARN, startingPoint);
     KinesisClientBuilderStub builder =
         SimplifiedKinesisAsyncClientStubBehaviours.twoShardsWithRecordsAndShardUp();
 
@@ -107,7 +110,7 @@ public class StreamConsumerTest {
 
   @Test
   public void consumesAllEventsFromChildShardsAfterMerge() throws InterruptedException {
-    Config config = new Config(STREAM_NAME, CONSUMER_ARN, StartType.LATEST);
+    Config config = new Config(STREAM_NAME, CONSUMER_ARN, startingPoint);
     KinesisClientBuilderStub builder =
         SimplifiedKinesisAsyncClientStubBehaviours.fourShardsWithRecordsAndShardDown();
 
@@ -127,7 +130,7 @@ public class StreamConsumerTest {
 
   @Test
   public void consumersNoEventsFromEmptyShards() throws InterruptedException {
-    Config config = new Config(STREAM_NAME, CONSUMER_ARN, StartType.LATEST);
+    Config config = new Config(STREAM_NAME, CONSUMER_ARN, startingPoint);
     KinesisClientBuilderStub builder = SimplifiedKinesisAsyncClientStubBehaviours.twoShardsEmpty();
 
     InMemCollectionRecordsSink sink = new InMemCollectionRecordsSink();
@@ -142,7 +145,7 @@ public class StreamConsumerTest {
 
   @Test
   public void stopsUponUnRecoverableError() throws InterruptedException {
-    Config config = new Config(STREAM_NAME, CONSUMER_ARN, StartType.LATEST);
+    Config config = new Config(STREAM_NAME, CONSUMER_ARN, startingPoint);
     KinesisClientBuilderStub builder =
         SimplifiedKinesisAsyncClientStubBehaviours.twoShardsWithRecordsOneShardError();
 
@@ -154,7 +157,7 @@ public class StreamConsumerTest {
 
   @Test
   public void continuesUponRecoverableError() throws InterruptedException {
-    Config config = new Config(STREAM_NAME, CONSUMER_ARN, StartType.LATEST);
+    Config config = new Config(STREAM_NAME, CONSUMER_ARN, startingPoint);
     KinesisClientBuilderStub builder =
         SimplifiedKinesisAsyncClientStubBehaviours.twoShardsWithRecordsOneShardRecoverableError();
 

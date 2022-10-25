@@ -22,35 +22,48 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Prec
 import java.io.IOException;
 import java.util.NoSuchElementException;
 import org.apache.beam.sdk.io.UnboundedSource;
+import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.LogCountRecordsSink;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.RecordsSink;
 import org.joda.time.Duration;
 import org.joda.time.Instant;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @SuppressWarnings("UnusedVariable")
 public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader<KinesisRecord> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(KinesisEnhancedFanOutReader.class);
+
   private final KinesisIO.Read spec;
-  private final SimplifiedKinesisClient kinesis;
+  private final ClientBuilder clientBuilder;
   private final KinesisEnhancedFanOutSource source;
   private final CheckpointGenerator checkpointGenerator;
   private final Duration backlogBytesCheckThreshold;
 
+  private CustomOptional<KinesisRecord> currentRecord = CustomOptional.absent();
+  private long lastBacklogBytes;
+  private Instant backlogBytesLastCheckTime = new Instant(0L);
+  private StreamConsumer streamConsumer;
+
   KinesisEnhancedFanOutReader(
       KinesisIO.Read spec,
-      SimplifiedKinesisClient kinesis,
+      ClientBuilder clientBuilder,
       CheckpointGenerator initialCheckpointGenerator,
       KinesisEnhancedFanOutSource source) {
-    this(spec, kinesis, initialCheckpointGenerator, source, Duration.standardSeconds(30));
+    this(spec, clientBuilder, initialCheckpointGenerator, source, Duration.standardSeconds(30));
   }
 
   KinesisEnhancedFanOutReader(
       KinesisIO.Read spec,
-      SimplifiedKinesisClient kinesis,
+      ClientBuilder clientBuilder,
       CheckpointGenerator checkpointGenerator,
       KinesisEnhancedFanOutSource source,
       Duration backlogBytesCheckThreshold) {
     this.spec = checkNotNull(spec, "spec");
-    this.kinesis = checkNotNull(kinesis, "kinesis");
+    this.clientBuilder = checkNotNull(clientBuilder, "clientBuilder");
     this.checkpointGenerator = checkNotNull(checkpointGenerator, "checkpointGenerator");
     this.source = source;
     this.backlogBytesCheckThreshold = backlogBytesCheckThreshold;
@@ -58,12 +71,20 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
 
   @Override
   public boolean start() throws IOException {
-    return false;
+    LOG.info("Starting reader using {}", checkpointGenerator);
+
+    Config config =
+        new Config(spec.getStreamName(), spec.getConsumerArn(), spec.getInitialPosition());
+    RecordsSink sink = new LogCountRecordsSink();
+    streamConsumer = StreamConsumer.init(config, clientBuilder, sink);
+
+    return streamConsumer.isRunning() && advance();
   }
 
   @Override
   public boolean advance() throws IOException {
-    return false;
+    currentRecord = streamConsumer.nextRecord();
+    return currentRecord.isPresent();
   }
 
   @Override

@@ -32,6 +32,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
+import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals.CriticalErrorSignal;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals.ReShardSignal;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals.ShardSubscriberSignal;
@@ -273,5 +275,9 @@ public class StreamConsumer implements Runnable {
             "After %s attempts still not found shard info for %s",
             currentAttempt, expectedShardsIds);
     throw new RuntimeException(msg);
+  }
+
+  public CustomOptional<KinesisRecord> nextRecord() {
+    return CustomOptional.absent();
   }
 }
