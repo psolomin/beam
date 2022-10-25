@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -58,9 +59,10 @@ public class StreamConsumer implements Runnable {
   private static final Logger LOG = LoggerFactory.getLogger(StreamConsumer.class);
   private static final String LOG_MSG_TEMPLATE = "Stream = {} consumer = {}";
 
-  private static final Long signalsOfferTimeoutMs = 1_000L;
+  private static final long startTimeoutMs = 10_000;
+  private static final long signalsOfferTimeoutMs = 1_000L;
   private static final Long signalsPollTimeoutMs = 10_000L;
-  private static final int awaitTerminationTimeoutMs = 30_000;
+  private static final long awaitTerminationTimeoutMs = 30_000;
 
   private final Config config;
   private final ClientBuilder clientBuilder;
@@ -71,8 +73,13 @@ public class StreamConsumer implements Runnable {
       new LinkedBlockingQueue<>(Integer.MAX_VALUE);
   private final AtomicBoolean isRunning = new AtomicBoolean(false);
   private final RecordsSink recordsSink;
+  private final CountDownLatch consumerStartedLatch;
 
-  public StreamConsumer(Config config, ClientBuilder clientBuilder, RecordsSink recordsSink) {
+  private StreamConsumer(
+      Config config,
+      ClientBuilder clientBuilder,
+      RecordsSink recordsSink,
+      CountDownLatch consumerStartedLatch) {
     LOG.info(LOG_MSG_TEMPLATE + " Creating pool", config.getStreamName(), config.getConsumerArn());
     this.config = config;
     this.clientBuilder = clientBuilder;
@@ -80,6 +87,7 @@ public class StreamConsumer implements Runnable {
     this.progressTracker =
         ShardsProgressHistory.initSubscribedShardsProgressInfo(config, clientBuilder);
     this.recordsSink = recordsSink;
+    this.consumerStartedLatch = consumerStartedLatch;
   }
 
   public static StreamConsumer init(
@@ -88,11 +96,17 @@ public class StreamConsumer implements Runnable {
         String.format(
             "shard-consumers-pool-coordinator-%s-%s",
             config.getStreamName(), config.getConsumerArn());
-    StreamConsumer streamConsumer = new StreamConsumer(config, clientBuilder, recordsSink);
+    CountDownLatch latch = new CountDownLatch(1);
+    StreamConsumer streamConsumer = new StreamConsumer(config, clientBuilder, recordsSink, latch);
     Thread t = new Thread(streamConsumer, coordinatorName);
     t.setDaemon(true);
     t.start();
-    return streamConsumer;
+    try {
+      if (latch.await(startTimeoutMs, TimeUnit.MILLISECONDS)) return streamConsumer;
+      else throw new RuntimeException(String.format("Did not start within %s ms", startTimeoutMs));
+    } catch (InterruptedException e) {
+      throw new RuntimeException("Interrupted while waiting to start");
+    }
   }
 
   public void initiateGracefulShutdown() {
@@ -189,6 +203,7 @@ public class StreamConsumer implements Runnable {
     submitShardConsumersTasks();
     isRunning.set(true);
     LOG.info(LOG_MSG_TEMPLATE + " Started", config.getStreamName(), config.getConsumerArn());
+    consumerStartedLatch.countDown();
 
     while (isRunning.get()) {
       try {
@@ -286,7 +301,11 @@ public class StreamConsumer implements Runnable {
     Set<String> expectedShardsIds =
         expectedShards.stream().map(ChildShard::shardId).collect(Collectors.toSet());
     while (currentAttempt <= maxAttempts) {
-      List<Shard> newShards = getShardsAfterParent(receivedFromShardId, config, clientBuilder);
+      List<Shard> newShards =
+          getShardsAfterParent(receivedFromShardId, config, clientBuilder).stream()
+              .filter(s -> expectedShardsIds.contains(s.shardId()))
+              .collect(Collectors.toList());
+
       Set<String> newShardsIds = newShards.stream().map(Shard::shardId).collect(Collectors.toSet());
       expectedShardsIds.removeAll(newShardsIds);
       if (expectedShardsIds.size() == 0) return newShards;
@@ -304,15 +323,12 @@ public class StreamConsumer implements Runnable {
   }
 
   public CustomOptional<KinesisRecord> nextRecord() {
-    if (recordsSink.getTotalCnt() == 0) return CustomOptional.absent();
-    else {
-      Record record = recordsSink.fetch();
-      if (record != null)
-        return CustomOptional.of(
-            new KinesisRecord(
-                record.getKinesisClientRecord(), config.getStreamName(), record.getShardId()));
-    }
-    return CustomOptional.absent();
+    Record record = recordsSink.fetch();
+    if (record != null)
+      return CustomOptional.of(
+          new KinesisRecord(
+              record.getKinesisClientRecord(), config.getStreamName(), record.getShardId()));
+    else return CustomOptional.absent();
   }
 
   public Instant getWatermark() {

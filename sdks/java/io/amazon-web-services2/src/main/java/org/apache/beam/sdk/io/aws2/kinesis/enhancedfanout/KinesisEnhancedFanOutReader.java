@@ -25,7 +25,7 @@ import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
-import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.LogCountRecordsSink;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.InMemGlobalQueueRecordsSink;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.RecordsSink;
 import org.joda.time.Duration;
 import org.joda.time.Instant;
@@ -73,7 +73,7 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
 
     Config config =
         new Config(spec.getStreamName(), spec.getConsumerArn(), spec.getInitialPosition());
-    RecordsSink sink = new LogCountRecordsSink();
+    RecordsSink sink = new InMemGlobalQueueRecordsSink();
     streamConsumer = StreamConsumer.init(config, clientBuilder, sink);
     return streamConsumer.isRunning();
   }
