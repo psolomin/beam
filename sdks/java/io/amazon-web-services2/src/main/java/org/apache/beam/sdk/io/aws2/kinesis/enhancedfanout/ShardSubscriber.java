@@ -149,7 +149,7 @@ class ShardSubscriber {
               return false;
             }
           }
-        case RECORDS:
+        case RECORDS: // TODO: this may throw
           {
             SubscribeToShardEvent subscribeToShardEvent = event.getWrappedEvent();
             eventConsumer.accept(subscribeToShardEvent);

@@ -44,4 +44,9 @@ public class LogCountRecordsSink implements RecordsSink {
   public long getTotalCnt() {
     return counter.get();
   }
+
+  @Override
+  public Record fetch() {
+    return null;
+  }
 }

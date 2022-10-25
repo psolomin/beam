@@ -48,6 +48,11 @@ public class InMemCollectionRecordsSink implements RecordsSink {
     return events.values().stream().map(q -> (long) q.size()).reduce(0L, Long::sum);
   }
 
+  @Override
+  public Record fetch() {
+    return null;
+  }
+
   public List<KinesisClientRecord> getAllRecords(String shardId) {
     return new ArrayList<>(events.get(shardId));
   }

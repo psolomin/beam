@@ -17,16 +17,36 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink;
 
-import net.bytebuddy.utility.nullability.MaybeNull;
+import java.util.Objects;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
-public interface RecordsSink {
-  void submit(String shardId, KinesisClientRecord record);
+public class Record {
+  private final String shardId;
+  private final KinesisClientRecord kinesisClientRecord;
 
-  void submit(String shardId, Iterable<KinesisClientRecord> records);
+  public Record(String shardId, KinesisClientRecord kinesisClientRecord) {
+    this.shardId = shardId;
+    this.kinesisClientRecord = kinesisClientRecord;
+  }
 
-  long getTotalCnt();
+  public String getShardId() {
+    return shardId;
+  }
 
-  @MaybeNull
-  Record fetch();
+  public KinesisClientRecord getKinesisClientRecord() {
+    return kinesisClientRecord;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    Record record = (Record) o;
+    return shardId.equals(record.shardId) && kinesisClientRecord.equals(record.kinesisClientRecord);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(shardId, kinesisClientRecord);
+  }
 }

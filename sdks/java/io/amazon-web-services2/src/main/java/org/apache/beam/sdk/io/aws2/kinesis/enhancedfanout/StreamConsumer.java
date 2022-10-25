@@ -37,6 +37,7 @@ import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals.CriticalErrorSignal;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals.ReShardSignal;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals.ShardSubscriberSignal;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.Record;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.RecordsSink;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -278,6 +279,14 @@ public class StreamConsumer implements Runnable {
   }
 
   public CustomOptional<KinesisRecord> nextRecord() {
+    if (recordsSink.getTotalCnt() == 0) return CustomOptional.absent();
+    else {
+      Record record = recordsSink.fetch();
+      if (record != null)
+        return CustomOptional.of(
+            new KinesisRecord(
+                record.getKinesisClientRecord(), config.getStreamName(), record.getShardId()));
+    }
     return CustomOptional.absent();
   }
 }
