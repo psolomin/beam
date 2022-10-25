@@ -45,7 +45,7 @@ class ShardSubscriber {
   private static final long DEFAULT_QUEUE_POLL_TIMEOUT_MS = 15_000;
   private final StreamConsumer pool;
   private final BlockingQueue<ShardEvent> queue = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
-  private final SimplifiedKinesisAsyncClient client;
+  private final KinesisAsyncClientProxy client;
   private final String streamName;
   private final String consumerArn;
   private final String shardId;
@@ -54,7 +54,7 @@ class ShardSubscriber {
 
   ShardSubscriber(
       StreamConsumer pool,
-      SimplifiedKinesisAsyncClient client,
+      KinesisAsyncClientProxy client,
       String streamName,
       String consumerArn,
       String shardId) {

@@ -19,7 +19,7 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 public class ClientBuilderImpl implements ClientBuilder {
   @Override
-  public SimplifiedKinesisAsyncClient build() {
-    return new SimplifiedKinesisAsyncClientImpl();
+  public KinesisAsyncClientProxy build() {
+    return new KinesisAsyncClientProxyImpl();
   }
 }

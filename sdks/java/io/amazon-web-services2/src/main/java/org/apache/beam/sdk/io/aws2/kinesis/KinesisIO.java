@@ -279,11 +279,11 @@ public final class KinesisIO {
   })
   public abstract static class Read extends PTransform<PBegin, PCollection<KinesisRecord>> {
 
-    abstract @Nullable String getStreamName();
+    public abstract @Nullable String getStreamName();
 
-    abstract @Nullable String getConsumerArn();
+    public abstract @Nullable String getConsumerArn();
 
-    abstract @Nullable StartingPoint getInitialPosition();
+    public abstract @Nullable StartingPoint getInitialPosition();
 
     abstract @Nullable ClientConfiguration getClientConfiguration();
 
