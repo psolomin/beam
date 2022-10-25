@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.stream.Stream;
 import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.KinesisClientBuilderStub;
-import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.SimplifiedKinesisAsyncClientStubBehaviours;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.KinesisClientProxyStubBehaviours;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.InMemCollectionRecordsSink;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 import org.junit.After;
@@ -39,9 +39,8 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 
 @RunWith(JUnit4.class)
 public class StreamConsumerTest {
-  private static final String STREAM_NAME = SimplifiedKinesisAsyncClientStubBehaviours.STREAM_NAME;
-  private static final String CONSUMER_ARN =
-      SimplifiedKinesisAsyncClientStubBehaviours.CONSUMER_ARN;
+  private static final String STREAM_NAME = KinesisClientProxyStubBehaviours.STREAM_NAME;
+  private static final String CONSUMER_ARN = KinesisClientProxyStubBehaviours.CONSUMER_ARN;
   private final StartingPoint startingPoint = new StartingPoint(InitialPositionInStream.LATEST);
   private StreamConsumer consumer;
 
@@ -55,8 +54,7 @@ public class StreamConsumerTest {
   @Test
   public void consumesAllEventsFromMultipleShards() throws InterruptedException {
     Config config = new Config(STREAM_NAME, CONSUMER_ARN, startingPoint);
-    KinesisClientBuilderStub builder =
-        SimplifiedKinesisAsyncClientStubBehaviours.twoShardsWithRecords();
+    KinesisClientBuilderStub builder = KinesisClientProxyStubBehaviours.twoShardsWithRecords();
 
     InMemCollectionRecordsSink sink = new InMemCollectionRecordsSink();
     consumer = StreamConsumer.init(config, builder, sink);
@@ -85,7 +83,7 @@ public class StreamConsumerTest {
   public void consumesAllEventsFromChildShards() throws InterruptedException {
     Config config = new Config(STREAM_NAME, CONSUMER_ARN, startingPoint);
     KinesisClientBuilderStub builder =
-        SimplifiedKinesisAsyncClientStubBehaviours.twoShardsWithRecordsAndShardUp();
+        KinesisClientProxyStubBehaviours.twoShardsWithRecordsAndShardUp();
 
     InMemCollectionRecordsSink sink = new InMemCollectionRecordsSink();
     consumer = StreamConsumer.init(config, builder, sink);
@@ -112,7 +110,7 @@ public class StreamConsumerTest {
   public void consumesAllEventsFromChildShardsAfterMerge() throws InterruptedException {
     Config config = new Config(STREAM_NAME, CONSUMER_ARN, startingPoint);
     KinesisClientBuilderStub builder =
-        SimplifiedKinesisAsyncClientStubBehaviours.fourShardsWithRecordsAndShardDown();
+        KinesisClientProxyStubBehaviours.fourShardsWithRecordsAndShardDown();
 
     InMemCollectionRecordsSink sink = new InMemCollectionRecordsSink();
     consumer = StreamConsumer.init(config, builder, sink);
@@ -131,7 +129,7 @@ public class StreamConsumerTest {
   @Test
   public void consumersNoEventsFromEmptyShards() throws InterruptedException {
     Config config = new Config(STREAM_NAME, CONSUMER_ARN, startingPoint);
-    KinesisClientBuilderStub builder = SimplifiedKinesisAsyncClientStubBehaviours.twoShardsEmpty();
+    KinesisClientBuilderStub builder = KinesisClientProxyStubBehaviours.twoShardsEmpty();
 
     InMemCollectionRecordsSink sink = new InMemCollectionRecordsSink();
     consumer = StreamConsumer.init(config, builder, sink);
@@ -147,7 +145,7 @@ public class StreamConsumerTest {
   public void stopsUponUnRecoverableError() throws InterruptedException {
     Config config = new Config(STREAM_NAME, CONSUMER_ARN, startingPoint);
     KinesisClientBuilderStub builder =
-        SimplifiedKinesisAsyncClientStubBehaviours.twoShardsWithRecordsOneShardError();
+        KinesisClientProxyStubBehaviours.twoShardsWithRecordsOneShardError();
 
     InMemCollectionRecordsSink sink = new InMemCollectionRecordsSink();
     consumer = StreamConsumer.init(config, builder, sink);
@@ -159,7 +157,7 @@ public class StreamConsumerTest {
   public void continuesUponRecoverableError() throws InterruptedException {
     Config config = new Config(STREAM_NAME, CONSUMER_ARN, startingPoint);
     KinesisClientBuilderStub builder =
-        SimplifiedKinesisAsyncClientStubBehaviours.twoShardsWithRecordsOneShardRecoverableError();
+        KinesisClientProxyStubBehaviours.twoShardsWithRecordsOneShardRecoverableError();
 
     InMemCollectionRecordsSink sink = new InMemCollectionRecordsSink();
     consumer = StreamConsumer.init(config, builder, sink);

@@ -17,7 +17,7 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers;
 
-public class SimplifiedKinesisAsyncClientStubBehaviours {
+public class KinesisClientProxyStubBehaviours {
   public static final String STREAM_NAME = "stream-01";
   public static final String CONSUMER_ARN = "consumer-01";
 
