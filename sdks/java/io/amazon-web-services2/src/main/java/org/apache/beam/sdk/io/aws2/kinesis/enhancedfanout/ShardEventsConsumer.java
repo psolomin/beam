@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.RecordsSink;
+import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.StartingPosition;
@@ -35,6 +36,7 @@ class ShardEventsConsumer implements Runnable {
   private final ShardSubscriber shardSubscriber;
   private final ShardProgress shardProgress;
   private final RecordsSink recordsSink;
+  private final ShardEventsConsumerState state;
 
   ShardEventsConsumer(
       StreamConsumer streamConsumer,
@@ -42,7 +44,8 @@ class ShardEventsConsumer implements Runnable {
       ClientBuilder builder,
       RecordsSink recordsSink,
       String shardId,
-      ShardProgress shardProgress) {
+      ShardProgress shardProgress,
+      ShardEventsConsumerState state) {
     this.shardId = shardId;
     this.shardSubscriber =
         new ShardSubscriber(
@@ -53,6 +56,7 @@ class ShardEventsConsumer implements Runnable {
             shardId);
     this.shardProgress = shardProgress;
     this.recordsSink = recordsSink;
+    this.state = state;
     this.isRunning = new AtomicBoolean(true);
   }
 
@@ -61,9 +65,10 @@ class ShardEventsConsumer implements Runnable {
       Config config,
       ClientBuilder builder,
       RecordsSink recordsSink,
-      ShardProgress progress) {
+      ShardProgress progress,
+      ShardEventsConsumerState state) {
     return new ShardEventsConsumer(
-        streamConsumer, config, builder, recordsSink, progress.getShardId(), progress);
+        streamConsumer, config, builder, recordsSink, progress.getShardId(), progress, state);
   }
 
   @Override
@@ -108,5 +113,9 @@ class ShardEventsConsumer implements Runnable {
   void initiateGracefulShutdown() {
     isRunning.set(false);
     shardSubscriber.cancel();
+  }
+
+  public static Instant getShardWatermark(ShardEventsConsumer shardEventsConsumer) {
+    return shardEventsConsumer.state.getShardWatermark();
   }
 }

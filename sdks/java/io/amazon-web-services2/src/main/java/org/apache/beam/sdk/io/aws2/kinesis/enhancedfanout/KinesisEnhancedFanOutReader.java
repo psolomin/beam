@@ -113,7 +113,7 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
 
   @Override
   public Instant getWatermark() {
-    return null;
+    return streamConsumer.getWatermark();
   }
 
   @Override
