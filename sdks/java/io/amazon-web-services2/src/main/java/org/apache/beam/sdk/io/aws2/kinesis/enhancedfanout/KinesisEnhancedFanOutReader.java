@@ -44,8 +44,6 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
   private final Duration backlogBytesCheckThreshold;
 
   private CustomOptional<KinesisRecord> currentRecord = CustomOptional.absent();
-  private long lastBacklogBytes;
-  private Instant backlogBytesLastCheckTime = new Instant(0L);
   private StreamConsumer streamConsumer;
 
   KinesisEnhancedFanOutReader(
@@ -77,8 +75,7 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
         new Config(spec.getStreamName(), spec.getConsumerArn(), spec.getInitialPosition());
     RecordsSink sink = new LogCountRecordsSink();
     streamConsumer = StreamConsumer.init(config, clientBuilder, sink);
-
-    return streamConsumer.isRunning() && advance();
+    return streamConsumer.isRunning();
   }
 
   @Override
@@ -88,17 +85,31 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
   }
 
   @Override
+  public byte[] getCurrentRecordId() throws NoSuchElementException {
+    return currentRecord.get().getUniqueId();
+  }
+
+  @Override
   public KinesisRecord getCurrent() throws NoSuchElementException {
-    return null;
+    return currentRecord.get();
   }
 
   @Override
   public Instant getCurrentTimestamp() throws NoSuchElementException {
-    return null;
+    return currentRecord.get().getApproximateArrivalTimestamp();
   }
 
   @Override
-  public void close() throws IOException {}
+  public void close() throws IOException {
+    try {
+      streamConsumer.initiateGracefulShutdown();
+      streamConsumer.awaitTermination();
+    } catch (RuntimeException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new IOException(e);
+    }
+  }
 
   @Override
   public Instant getWatermark() {
