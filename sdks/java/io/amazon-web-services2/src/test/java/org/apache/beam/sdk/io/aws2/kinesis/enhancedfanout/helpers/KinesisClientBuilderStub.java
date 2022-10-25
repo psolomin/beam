@@ -24,7 +24,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.ClientBuilder;
-import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.SimplifiedKinesisAsyncClient;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.KinesisAsyncClientProxy;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 
 public class KinesisClientBuilderStub implements ClientBuilder {
@@ -41,8 +41,8 @@ public class KinesisClientBuilderStub implements ClientBuilder {
   }
 
   @Override
-  public SimplifiedKinesisAsyncClient build() {
-    return new KinesisClientStub(
+  public KinesisAsyncClientProxy build() {
+    return new KinesisClientProxyStub(
         config,
         new AtomicInteger(config.getSubscriptionsPerShard()),
         seqNumber,

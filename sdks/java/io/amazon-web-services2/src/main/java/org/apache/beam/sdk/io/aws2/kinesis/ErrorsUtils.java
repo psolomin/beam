@@ -25,7 +25,7 @@ import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.LimitExceededException;
 import software.amazon.awssdk.services.kinesis.model.ProvisionedThroughputExceededException;
 
-class ErrorsUtils {
+public class ErrorsUtils {
   /**
    * Wraps Amazon specific exceptions into more friendly format.
    *
@@ -34,7 +34,7 @@ class ErrorsUtils {
    * @throws ExpiredIteratorException - if iterator needs to be refreshed
    * @throws RuntimeException - in all other cases
    */
-  static <T> T wrapExceptions(Callable<T> callable) throws TransientKinesisException {
+  public static <T> T wrapExceptions(Callable<T> callable) throws TransientKinesisException {
     try {
       return callable.call();
     } catch (ExpiredIteratorException e) {

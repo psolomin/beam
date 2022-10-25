@@ -17,6 +17,14 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-public interface ClientBuilder {
-  KinesisAsyncClientProxy build();
+import java.io.Serializable;
+import org.apache.beam.sdk.io.aws2.kinesis.KinesisReaderCheckpoint;
+import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
+
+/**
+ * Used to generate checkpoint object on demand. How exactly the checkpoint is generated is up to
+ * implementing class.
+ */
+interface CheckpointGenerator extends Serializable {
+  KinesisReaderCheckpoint generate(SimplifiedKinesisClient client) throws TransientKinesisException;
 }

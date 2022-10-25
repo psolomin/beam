@@ -94,7 +94,7 @@ public class ShardsProgressHistory {
 
   private static ListShardsResponse tryListingShards(
       ListShardsRequest listShardsRequest, ClientBuilder builder) {
-    try (SimplifiedKinesisAsyncClient c = builder.build()) {
+    try (KinesisAsyncClientProxy c = builder.build()) {
       ListShardsResponse response =
           c.listShards(listShardsRequest).get(shardListingTimeoutMs, TimeUnit.MILLISECONDS);
       LOG.debug("Shards found = {}", response.shards());

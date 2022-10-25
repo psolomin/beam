@@ -17,6 +17,12 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-public interface ClientBuilder {
-  KinesisAsyncClientProxy build();
+import java.util.List;
+import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
+import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
+import software.amazon.awssdk.services.kinesis.model.Shard;
+
+public interface SimplifiedKinesisClient {
+  List<Shard> listShardsAtPoint(String streamName, StartingPoint startingPoint)
+      throws TransientKinesisException;
 }

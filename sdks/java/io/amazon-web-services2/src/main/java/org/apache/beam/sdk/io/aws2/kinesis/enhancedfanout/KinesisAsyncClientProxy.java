@@ -23,7 +23,7 @@ import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 
-public interface SimplifiedKinesisAsyncClient extends AutoCloseable {
+public interface KinesisAsyncClientProxy extends AutoCloseable {
   CompletableFuture<ListShardsResponse> listShards(ListShardsRequest listShardsRequest);
 
   CompletableFuture<Void> subscribeToShard(

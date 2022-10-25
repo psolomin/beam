@@ -32,7 +32,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
-import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.SimplifiedKinesisAsyncClient;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.KinesisAsyncClientProxy;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
@@ -48,14 +48,14 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponse;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 
-class KinesisClientStub implements SimplifiedKinesisAsyncClient {
+class KinesisClientProxyStub implements KinesisAsyncClientProxy {
   private final KinesisClientStubConfig config;
   private final BlockingQueue<SubscribeToShardRequest> subscribeRequestsCollector;
   private final AtomicInteger seqNumber;
   private final AtomicInteger subscriptionsPerShardCountdown;
   private final Function<KinesisClientStubShardState, Void> eventsSubmitter;
 
-  KinesisClientStub(
+  KinesisClientProxyStub(
       KinesisClientStubConfig config,
       AtomicInteger subscriptionsPerShardCountdown,
       AtomicInteger seqNumber,

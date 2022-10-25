@@ -31,10 +31,10 @@ import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 
-public class SimplifiedKinesisAsyncClientImpl implements SimplifiedKinesisAsyncClient {
+public class KinesisAsyncClientProxyImpl implements KinesisAsyncClientProxy {
   private final KinesisAsyncClient client;
 
-  public SimplifiedKinesisAsyncClientImpl() {
+  public KinesisAsyncClientProxyImpl() {
     RetryPolicy retryPolicy =
         RetryPolicy.builder()
             .backoffStrategy(BackoffStrategy.defaultStrategy())
