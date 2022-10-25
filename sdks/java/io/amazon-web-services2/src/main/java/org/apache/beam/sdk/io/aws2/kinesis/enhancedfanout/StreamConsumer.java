@@ -19,11 +19,13 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.ShardsProgressHistory.getShardsAfterParent;
 
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -31,14 +33,21 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
+import org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint;
+import org.apache.beam.sdk.io.aws2.kinesis.WatermarkPolicy;
+import org.apache.beam.sdk.io.aws2.kinesis.WatermarkPolicyFactory;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals.CriticalErrorSignal;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals.ReShardSignal;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals.ShardSubscriberSignal;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.Record;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.RecordsSink;
+import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
+import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
@@ -57,7 +66,7 @@ public class StreamConsumer implements Runnable {
   private final ClientBuilder clientBuilder;
   private final ExecutorService executorService;
   private final ShardsProgressHistory progressTracker;
-  private Map<String, ShardEventsConsumer> consumers = new HashMap<>();
+  private final Map<String, ShardEventsConsumer> consumers = new ConcurrentHashMap<>();
   private final BlockingQueue<ShardSubscriberSignal> signals =
       new LinkedBlockingQueue<>(Integer.MAX_VALUE);
   private final AtomicBoolean isRunning = new AtomicBoolean(false);
@@ -203,13 +212,28 @@ public class StreamConsumer implements Runnable {
     progressTracker
         .shardsProgress()
         .forEach(
-            (k, v) ->
-                shardConsumerMap.put(
-                    k,
-                    ShardEventsConsumer.fromShardProgress(
-                        this, config, clientBuilder, recordsSink, v)));
-    consumers = shardConsumerMap;
+            (k, v) -> {
+              ShardEventsConsumerState state = initState(k);
+              shardConsumerMap.put(
+                  k,
+                  ShardEventsConsumer.fromShardProgress(
+                      this, config, clientBuilder, recordsSink, v, state));
+            });
+    consumers.putAll(shardConsumerMap);
     consumers.values().forEach(executorService::submit);
+  }
+
+  private ShardEventsConsumerState initState(String shardId) {
+    ShardCheckpoint checkpoint =
+        new ShardCheckpoint(
+            config.getStreamName(),
+            Optional.of(config.getConsumerArn()),
+            shardId,
+            config.getStartingPoint());
+    WatermarkPolicy watermarkPolicy =
+        WatermarkPolicyFactory.withArrivalTimePolicy().createWatermarkPolicy();
+    return new ShardEventsConsumerStateImpl(
+        shardId, checkpoint, watermarkPolicy, WatermarkPolicyFactory.withArrivalTimePolicy());
   }
 
   @SuppressWarnings("FutureReturnValueIgnored")
@@ -235,9 +259,10 @@ public class StreamConsumer implements Runnable {
             ShardProgress progress = new ShardProgress(config, id, beginningSeqNumber);
             progressTracker.addShard(id, progress);
 
+            ShardEventsConsumerState state = initState(id);
             ShardEventsConsumer newConsumer =
                 ShardEventsConsumer.fromShardProgress(
-                    this, config, clientBuilder, recordsSink, progress);
+                    this, config, clientBuilder, recordsSink, progress, state);
             consumers.put(id, newConsumer);
             executorService.submit(newConsumer);
           }
@@ -288,5 +313,16 @@ public class StreamConsumer implements Runnable {
                 record.getKinesisClientRecord(), config.getStreamName(), record.getShardId()));
     }
     return CustomOptional.absent();
+  }
+
+  public Instant getWatermark() {
+    return getMinTimestamp(ShardEventsConsumer::getShardWatermark);
+  }
+
+  private Instant getMinTimestamp(Function<ShardEventsConsumer, Instant> timestampExtractor) {
+    return consumers.values().stream()
+        .map(timestampExtractor)
+        .min(Comparator.naturalOrder())
+        .orElse(BoundedWindow.TIMESTAMP_MAX_VALUE);
   }
 }
