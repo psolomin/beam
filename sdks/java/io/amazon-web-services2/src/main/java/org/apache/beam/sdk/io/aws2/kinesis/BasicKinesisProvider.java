@@ -27,7 +27,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
-import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 
 /**
@@ -51,11 +50,6 @@ class BasicKinesisProvider implements AWSClientsProvider {
   @Override
   public KinesisClient getKinesisClient() {
     return defaultFactory().create(KinesisClient.builder(), config, null).build();
-  }
-
-  @Override
-  public KinesisAsyncClient getKinesisAsyncClient() {
-    return defaultFactory().create(KinesisAsyncClient.builder(), config, null).build();
   }
 
   @Override

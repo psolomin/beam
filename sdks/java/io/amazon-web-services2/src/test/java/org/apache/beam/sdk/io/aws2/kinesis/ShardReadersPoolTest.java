@@ -33,7 +33,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Stopwatch;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 import org.joda.time.Duration;
@@ -72,9 +71,7 @@ public class ShardReadersPoolTest {
     when(d.getShardId()).thenReturn("shard2");
     when(firstCheckpoint.getShardId()).thenReturn("shard1");
     when(firstCheckpoint.getStreamName()).thenReturn("testStream");
-    when(firstCheckpoint.getConsumerArn()).thenReturn(Optional.absent());
     when(secondCheckpoint.getShardId()).thenReturn("shard2");
-    when(secondCheckpoint.getConsumerArn()).thenReturn(Optional.absent());
     when(firstIterator.getStreamName()).thenReturn("testStream");
     when(firstIterator.getShardId()).thenReturn("shard1");
     when(firstIterator.getCheckpoint()).thenReturn(firstCheckpoint);

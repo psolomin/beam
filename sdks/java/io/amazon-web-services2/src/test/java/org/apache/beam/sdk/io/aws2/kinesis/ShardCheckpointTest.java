@@ -19,8 +19,8 @@ package org.apache.beam.sdk.io.aws2.kinesis;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AFTER_SEQUENCE_NUMBER;
@@ -30,7 +30,6 @@ import static software.amazon.kinesis.common.InitialPositionInStream.LATEST;
 import static software.amazon.kinesis.common.InitialPositionInStream.TRIM_HORIZON;
 
 import java.io.IOException;
-import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import org.joda.time.DateTime;
 import org.joda.time.Instant;
 import org.junit.Before;
@@ -48,7 +47,6 @@ public class ShardCheckpointTest {
   private static final String AT_SEQUENCE_SHARD_IT = "AT_SEQUENCE_SHARD_IT";
   private static final String AFTER_SEQUENCE_SHARD_IT = "AFTER_SEQUENCE_SHARD_IT";
   private static final String STREAM_NAME = "STREAM";
-  private static final Optional<String> CONSUMER_ARN = Optional.of("CONSUMER_ARN");
   private static final String SHARD_ID = "SHARD_ID";
   @Mock private SimplifiedKinesisClient client;
 
@@ -84,15 +82,13 @@ public class ShardCheckpointTest {
 
   @Test
   public void testComparisonWithExtendedSequenceNumber() {
-    String streamName = "";
-    Optional<String> consumerArn = Optional.of("");
     assertThat(
-            new ShardCheckpoint(streamName, consumerArn, "", new StartingPoint(LATEST))
+            new ShardCheckpoint("", "", new StartingPoint(LATEST))
                 .isBeforeOrAt(recordWith(new ExtendedSequenceNumber("100", 0L))))
         .isTrue();
 
     assertThat(
-            new ShardCheckpoint(streamName, consumerArn, "", new StartingPoint(TRIM_HORIZON))
+            new ShardCheckpoint("", "", new StartingPoint(TRIM_HORIZON))
                 .isBeforeOrAt(recordWith(new ExtendedSequenceNumber("100", 0L))))
         .isTrue();
 
@@ -151,7 +147,7 @@ public class ShardCheckpointTest {
   private ShardCheckpoint checkpoint(
       ShardIteratorType iteratorType, String sequenceNumber, Long subSequenceNumber) {
     return new ShardCheckpoint(
-        STREAM_NAME, CONSUMER_ARN, SHARD_ID, iteratorType, sequenceNumber, subSequenceNumber);
+        STREAM_NAME, SHARD_ID, iteratorType, sequenceNumber, subSequenceNumber);
   }
 
   private KinesisRecord recordWith(Instant approximateArrivalTimestamp) {
@@ -161,6 +157,6 @@ public class ShardCheckpointTest {
   }
 
   private ShardCheckpoint checkpoint(ShardIteratorType iteratorType, Instant timestamp) {
-    return new ShardCheckpoint(STREAM_NAME, CONSUMER_ARN, SHARD_ID, iteratorType, timestamp);
+    return new ShardCheckpoint(STREAM_NAME, SHARD_ID, iteratorType, timestamp);
   }
 }

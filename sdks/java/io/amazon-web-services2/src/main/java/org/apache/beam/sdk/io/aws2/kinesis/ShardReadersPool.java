@@ -129,43 +129,8 @@ class ShardReadersPool {
         getShardIdsFromRecordsIterators(shardRecordsIterators));
     for (final ShardRecordsIterator recordsIterator : shardRecordsIterators) {
       numberOfRecordsInAQueueByShard.put(recordsIterator.getShardId(), new AtomicInteger());
-
-      if (recordsIterator.hasConsumer()) {
-        LOG.info(
-            "Subscribing to shard {} via consumer {}",
-            recordsIterator.getShardId(),
-            recordsIterator.getConsumerInfo());
-        executorService.submit(() -> subscribeLoop(recordsIterator));
-      } else {
-        RateLimitPolicy policy = read.getRateLimitPolicyFactory().getRateLimitPolicy();
-        executorService.submit(() -> readLoop(recordsIterator, policy));
-      }
-    }
-  }
-
-  private void subscribeLoop(ShardRecordsIterator shardRecordsIterator) {
-    while (poolOpened.get()) {
-      try {
-        shardRecordsIterator.subscribeToShard(this::putRecord);
-      } catch (TransientKinesisException e) {
-        LOG.warn("Transient exception occurred.", e);
-      } catch (Throwable e) {
-        LOG.error("Unexpected exception occurred", e);
-        poolOpened.set(false);
-      }
-    }
-    LOG.info("Kinesis Shard subscribe loop has finished");
-  }
-
-  private void putRecord(KinesisRecord kinesisRecord) {
-    try {
-      LOG.debug("Received record: {}", kinesisRecord);
-      if (recordsQueue.offer(kinesisRecord, QUEUE_OFFER_TIMEOUT_MS, MILLISECONDS))
-        numberOfRecordsInAQueueByShard.get(kinesisRecord.getShardId()).incrementAndGet();
-    } catch (InterruptedException e) {
-      LOG.warn("Thread was interrupted, finishing the read loop", e);
-      Thread.currentThread().interrupt();
-      poolOpened.set(false);
+      RateLimitPolicy policy = read.getRateLimitPolicyFactory().getRateLimitPolicy();
+      executorService.submit(() -> readLoop(recordsIterator, policy));
     }
   }
 

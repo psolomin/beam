@@ -19,8 +19,6 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
-import org.apache.beam.sdk.io.aws2.kinesis.KinesisReaderCheckpoint;
-
 /** Always returns the same instance of checkpoint. */
 class StaticCheckpointGenerator implements CheckpointGenerator {
 
