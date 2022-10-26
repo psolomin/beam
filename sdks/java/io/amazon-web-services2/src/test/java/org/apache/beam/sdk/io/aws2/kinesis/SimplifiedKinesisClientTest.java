@@ -19,11 +19,6 @@ package org.apache.beam.sdk.io.aws2.kinesis;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.reset;
@@ -35,8 +30,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import org.joda.time.DateTimeUtils;
 import org.joda.time.Duration;
 import org.joda.time.Instant;
@@ -57,7 +50,6 @@ import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
 import software.amazon.awssdk.services.cloudwatch.model.Datapoint;
 import software.amazon.awssdk.services.cloudwatch.model.GetMetricStatisticsRequest;
 import software.amazon.awssdk.services.cloudwatch.model.GetMetricStatisticsResponse;
-import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryRequest;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryResponse;
@@ -76,9 +68,6 @@ import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.awssdk.services.kinesis.model.StreamDescriptionSummary;
-import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
-import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
-import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 import software.amazon.kinesis.common.InitialPositionInStream;
 
 /** * */
@@ -86,36 +75,20 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 public class SimplifiedKinesisClientTest {
 
   private static final String STREAM = "stream";
-  private static final String CONSUMER_ARN = "stream/cons-01:111";
   private static final String SHARD_1 = "shard-01";
   private static final String SHARD_2 = "shard-02";
   private static final String SHARD_3 = "shard-03";
   private static final String SHARD_ITERATOR = "iterator";
   private static final String SEQUENCE_NUMBER = "abc123";
   private static final Instant CURRENT_TIMESTAMP = Instant.parse("2000-01-01T15:00:00.000Z");
-  private static final SubscribeToShardResponseHandler.Visitor RESPONSE_HANDLER_VISITOR =
-      new SubscribeToShardResponseHandler.Visitor() {
-        @Override
-        public void visit(SubscribeToShardEvent event) {}
-      };
-
-  private static final SubscribeToShardRequest SUBSCRIBE_TO_SHARD_REQUEST =
-      SubscribeToShardRequest.builder()
-          .consumerARN(CONSUMER_ARN)
-          .shardId(SHARD_1)
-          .startingPosition(
-              s -> s.type(ShardIteratorType.AT_SEQUENCE_NUMBER).sequenceNumber(SEQUENCE_NUMBER))
-          .build();
 
   @Mock private KinesisClient kinesis;
-  @Mock private KinesisAsyncClient kinesisAsync;
   @Mock private CloudWatchClient cloudWatch;
   private SimplifiedKinesisClient underTest;
 
   @Before
   public void init() {
-    underTest =
-        new SimplifiedKinesisClient(() -> kinesis, () -> kinesisAsync, () -> cloudWatch, null);
+    underTest = new SimplifiedKinesisClient(() -> kinesis, () -> cloudWatch, null);
   }
 
   @After
@@ -142,7 +115,6 @@ public class SimplifiedKinesisClientTest {
 
     underTest.close();
     verify(kinesis).close();
-    verifyNoInteractions(kinesisAsync);
     verifyNoInteractions(cloudWatch);
   }
 
@@ -166,55 +138,6 @@ public class SimplifiedKinesisClientTest {
 
     underTest.close();
     verify(kinesis).close();
-    verifyNoInteractions(kinesisAsync);
-    verifyNoInteractions(cloudWatch);
-  }
-
-  @Test
-  public void shouldSubscribeToShard() throws Exception {
-    when(kinesisAsync.subscribeToShard(eq(SUBSCRIBE_TO_SHARD_REQUEST), any()))
-        .thenReturn(CompletableFuture.completedFuture(null));
-
-    CompletableFuture<Void> f =
-        underTest.subscribeToShard(
-            CONSUMER_ARN,
-            SHARD_1,
-            ShardIteratorType.AT_SEQUENCE_NUMBER,
-            SEQUENCE_NUMBER,
-            null,
-            RESPONSE_HANDLER_VISITOR,
-            e -> {});
-
-    assertFalse(f.isCompletedExceptionally());
-    underTest.close();
-    verify(kinesisAsync).close();
-    verifyNoInteractions(kinesis);
-    verifyNoInteractions(cloudWatch);
-  }
-
-  @Test
-  public void shouldFailSubscribeToShard() throws Exception {
-    when(kinesisAsync.subscribeToShard(eq(SUBSCRIBE_TO_SHARD_REQUEST), any()))
-        .thenReturn(failedFuture(new KinesisShardClosedException("oh, no..")));
-
-    CompletableFuture<Void> f =
-        underTest.subscribeToShard(
-            CONSUMER_ARN,
-            SHARD_1,
-            ShardIteratorType.AT_SEQUENCE_NUMBER,
-            SEQUENCE_NUMBER,
-            null,
-            RESPONSE_HANDLER_VISITOR,
-            e -> {});
-
-    assertTrue(f.isCompletedExceptionally());
-    Throwable exception = assertThrows(ExecutionException.class, f::get);
-    assertEquals(
-        "org.apache.beam.sdk.io.aws2.kinesis.KinesisShardClosedException: oh, no..",
-        exception.getMessage());
-    underTest.close();
-    verify(kinesisAsync).close();
-    verifyNoInteractions(kinesis);
     verifyNoInteractions(cloudWatch);
   }
 
@@ -301,7 +224,6 @@ public class SimplifiedKinesisClientTest {
 
     underTest.close();
     verify(kinesis).close();
-    verifyNoInteractions(kinesisAsync);
     verifyNoInteractions(cloudWatch);
   }
 
@@ -747,7 +669,6 @@ public class SimplifiedKinesisClientTest {
 
     underTest.close();
     verify(kinesis).close();
-    verifyNoInteractions(kinesisAsync);
     verifyNoInteractions(cloudWatch);
   }
 
@@ -764,13 +685,5 @@ public class SimplifiedKinesisClientTest {
               .build());
     }
     return records;
-  }
-
-  private static <T> CompletableFuture<T> failedFuture(Throwable ex) {
-    // copied from Java 9
-    // https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/CompletableFuture.html#failedFuture(java.lang.Throwable)
-    CompletableFuture<T> f = new CompletableFuture<>();
-    f.completeExceptionally(ex);
-    return f;
   }
 }

@@ -22,8 +22,6 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Prec
 
 import java.io.IOException;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.apache.beam.sdk.util.BackOff;
@@ -40,7 +38,6 @@ import software.amazon.awssdk.services.cloudwatch.model.Dimension;
 import software.amazon.awssdk.services.cloudwatch.model.GetMetricStatisticsRequest;
 import software.amazon.awssdk.services.cloudwatch.model.GetMetricStatisticsResponse;
 import software.amazon.awssdk.services.cloudwatch.model.Statistic;
-import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryRequest;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
@@ -55,8 +52,6 @@ import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.awssdk.services.kinesis.model.StreamDescriptionSummary;
-import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
-import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
@@ -80,17 +75,14 @@ class SimplifiedKinesisClient implements AutoCloseable {
       Duration.standardSeconds(1);
 
   private final LazyResource<KinesisClient> kinesis;
-  private final LazyResource<KinesisAsyncClient> kinesisAsync;
   private final LazyResource<CloudWatchClient> cloudWatch;
   private final Integer limit;
 
   SimplifiedKinesisClient(
       Supplier<KinesisClient> kinesisSupplier,
-      Supplier<KinesisAsyncClient> kinesisAsyncSupplier,
       Supplier<CloudWatchClient> cloudWatchSupplier,
       Integer limit) {
     this.kinesis = new LazyResource<>(checkNotNull(kinesisSupplier, "kinesis"));
-    this.kinesisAsync = new LazyResource<>(checkNotNull(kinesisAsyncSupplier, "kinesisAsync"));
     this.cloudWatch = new LazyResource<>(checkNotNull(cloudWatchSupplier, "cloudWatch"));
     this.limit = limit;
   }
@@ -315,29 +307,6 @@ class SimplifiedKinesisClient implements AutoCloseable {
         });
   }
 
-  public CompletableFuture<Void> subscribeToShard(
-      final String consumerArn,
-      final String shardId,
-      final ShardIteratorType shardIteratorType,
-      final String startingSequenceNumber,
-      final Instant timestamp,
-      final SubscribeToShardResponseHandler.Visitor visitor,
-      final Consumer<Throwable> onError) {
-    SubscribeToShardRequest request =
-        SubscribeToShardRequest.builder()
-            .consumerARN(consumerArn)
-            .shardId(shardId)
-            .startingPosition(
-                s ->
-                    s.type(shardIteratorType)
-                        .sequenceNumber(startingSequenceNumber)
-                        .timestamp(TimeUtil.toJava(timestamp)))
-            .build();
-    SubscribeToShardResponseHandler responseHandler =
-        SubscribeToShardResponseHandler.builder().subscriber(visitor).onError(onError).build();
-    return kinesisAsync.get().subscribeToShard(request, responseHandler);
-  }
-
   GetMetricStatisticsRequest createMetricStatisticsRequest(
       String streamName, Instant countSince, Instant countTo, Minutes period) {
     return GetMetricStatisticsRequest.builder()
@@ -354,7 +323,6 @@ class SimplifiedKinesisClient implements AutoCloseable {
   @Override
   public void close() throws Exception {
     try (AutoCloseable c1 = kinesis;
-        AutoCloseable c2 = kinesisAsync;
         AutoCloseable c3 = cloudWatch) {
       // nothing to do
     }

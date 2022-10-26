@@ -38,7 +38,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
-import org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint;
 import org.apache.beam.sdk.io.aws2.kinesis.WatermarkPolicy;
 import org.apache.beam.sdk.io.aws2.kinesis.WatermarkPolicyFactory;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals.CriticalErrorSignal;
@@ -47,7 +46,6 @@ import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals.ShardSubscribe
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.Record;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.RecordsSink;
 import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
-import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -241,10 +239,7 @@ public class StreamConsumer implements Runnable {
   private ShardEventsConsumerState initState(String shardId) {
     ShardCheckpoint checkpoint =
         new ShardCheckpoint(
-            config.getStreamName(),
-            Optional.of(config.getConsumerArn()),
-            shardId,
-            config.getStartingPoint());
+            config.getStreamName(), config.getConsumerArn(), shardId, config.getStartingPoint());
     WatermarkPolicy watermarkPolicy =
         WatermarkPolicyFactory.withArrivalTimePolicy().createWatermarkPolicy();
     return new ShardEventsConsumerStateImpl(

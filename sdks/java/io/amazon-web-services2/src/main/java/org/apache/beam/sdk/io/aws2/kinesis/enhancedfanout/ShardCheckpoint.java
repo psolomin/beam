@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.kinesis;
+package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkArgument;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
@@ -24,6 +24,8 @@ import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AT
 import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AT_TIMESTAMP;
 
 import java.io.Serializable;
+import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
+import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.joda.time.Instant;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
@@ -45,39 +47,55 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 @SuppressWarnings({
   "nullness" // TODO(https://github.com/apache/beam/issues/20497)
 })
-class ShardCheckpoint implements Serializable {
+public class ShardCheckpoint implements Serializable {
 
   private final String streamName;
+  private final String consumerArn;
   private final String shardId;
   private final String sequenceNumber;
   private final ShardIteratorType shardIteratorType;
   private final Long subSequenceNumber;
   private final Instant timestamp;
 
-  public ShardCheckpoint(String streamName, String shardId, StartingPoint startingPoint) {
+  public ShardCheckpoint(
+      String streamName, String consumerArn, String shardId, StartingPoint startingPoint) {
     this(
         streamName,
+        consumerArn,
         shardId,
         ShardIteratorType.fromValue(startingPoint.getPositionName()),
         startingPoint.getTimestamp());
   }
 
   public ShardCheckpoint(
-      String streamName, String shardId, ShardIteratorType shardIteratorType, Instant timestamp) {
-    this(streamName, shardId, shardIteratorType, null, null, timestamp);
+      String streamName,
+      String consumerArn,
+      String shardId,
+      ShardIteratorType shardIteratorType,
+      Instant timestamp) {
+    this(streamName, consumerArn, shardId, shardIteratorType, null, null, timestamp);
   }
 
   public ShardCheckpoint(
       String streamName,
+      String consumerArn,
       String shardId,
       ShardIteratorType shardIteratorType,
       String sequenceNumber,
       Long subSequenceNumber) {
-    this(streamName, shardId, shardIteratorType, sequenceNumber, subSequenceNumber, null);
+    this(
+        streamName,
+        consumerArn,
+        shardId,
+        shardIteratorType,
+        sequenceNumber,
+        subSequenceNumber,
+        null);
   }
 
   private ShardCheckpoint(
       String streamName,
+      String consumerArn,
       String shardId,
       ShardIteratorType shardIteratorType,
       String sequenceNumber,
@@ -85,6 +103,7 @@ class ShardCheckpoint implements Serializable {
       Instant timestamp) {
     this.shardIteratorType = checkNotNull(shardIteratorType, "shardIteratorType");
     this.streamName = checkNotNull(streamName, "streamName");
+    this.consumerArn = checkNotNull(consumerArn);
     this.shardId = checkNotNull(shardId, "shardId");
     if (shardIteratorType == AT_SEQUENCE_NUMBER || shardIteratorType == AFTER_SEQUENCE_NUMBER) {
       checkNotNull(
@@ -137,22 +156,8 @@ class ShardCheckpoint implements Serializable {
   @Override
   public String toString() {
     return String.format(
-        "Checkpoint %s for stream %s, shard %s: %s",
-        shardIteratorType, streamName, shardId, sequenceNumber);
-  }
-
-  public String getShardIterator(SimplifiedKinesisClient kinesisClient)
-      throws TransientKinesisException {
-    if (checkpointIsInTheMiddleOfAUserRecord()) {
-      return kinesisClient.getShardIterator(
-          streamName, shardId, AT_SEQUENCE_NUMBER, sequenceNumber, null);
-    }
-    return kinesisClient.getShardIterator(
-        streamName, shardId, shardIteratorType, sequenceNumber, timestamp);
-  }
-
-  private boolean checkpointIsInTheMiddleOfAUserRecord() {
-    return shardIteratorType == AFTER_SEQUENCE_NUMBER && subSequenceNumber != null;
+        "Checkpoint %s for stream %s, consumer %s,  shard %s: %s",
+        shardIteratorType, streamName, consumerArn, shardId, sequenceNumber);
   }
 
   /**
@@ -164,6 +169,7 @@ class ShardCheckpoint implements Serializable {
   public ShardCheckpoint moveAfter(KinesisRecord record) {
     return new ShardCheckpoint(
         streamName,
+        consumerArn,
         shardId,
         AFTER_SEQUENCE_NUMBER,
         record.getSequenceNumber(),
@@ -172,6 +178,10 @@ class ShardCheckpoint implements Serializable {
 
   public String getStreamName() {
     return streamName;
+  }
+
+  public String getConsumerArn() {
+    return consumerArn;
   }
 
   public String getShardId() {

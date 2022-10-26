@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.kinesis;
+package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.Lists.newArrayList;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.Lists.partition;
@@ -32,7 +32,7 @@ import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.Immutabl
  * covered by {@link KinesisReaderCheckpoint} may or may not be equal to set of all shards present
  * in the stream. This class is immutable.
  */
-class KinesisReaderCheckpoint
+public class KinesisReaderCheckpoint
     implements Iterable<ShardCheckpoint>, UnboundedSource.CheckpointMark, Serializable {
 
   private final List<ShardCheckpoint> shardCheckpoints;

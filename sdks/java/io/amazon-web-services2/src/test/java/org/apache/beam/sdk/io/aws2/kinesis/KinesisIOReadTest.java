@@ -32,7 +32,6 @@ import static software.amazon.kinesis.common.InitialPositionInStream.TRIM_HORIZO
 
 import java.net.URI;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -43,7 +42,6 @@ import org.apache.beam.sdk.io.aws2.common.ClientConfiguration;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO.Read;
 import org.apache.beam.sdk.testing.PAssert;
 import org.apache.beam.sdk.testing.TestPipeline;
-import org.apache.beam.sdk.transforms.Count;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.ParDo;
 import org.apache.beam.sdk.values.PCollection;
@@ -54,7 +52,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
@@ -63,14 +60,9 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.SdkBytes;
-import software.amazon.awssdk.core.async.SdkPublisher;
-import software.amazon.awssdk.core.pagination.async.AsyncPageFetcher;
-import software.amazon.awssdk.core.pagination.async.ResponsesSubscription;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchClientBuilder;
-import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
-import software.amazon.awssdk.services.kinesis.KinesisAsyncClientBuilder;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.kinesis.KinesisClientBuilder;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
@@ -82,9 +74,6 @@ import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.Shard;
-import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEventStream;
-import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
-import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 
 /** Tests for {@link KinesisIO#read}. */
 @RunWith(MockitoJUnitRunner.class)
@@ -94,17 +83,14 @@ public class KinesisIOReadTest {
 
   private static final int SHARDS = 3;
   private static final int SHARD_EVENTS = 100;
-  private static final long SHARDS_EVENTS_TOTAL = SHARDS * SHARD_EVENTS;
 
   @Rule public final transient TestPipeline p = TestPipeline.create();
 
   @Mock public KinesisClient client;
-  @Mock public KinesisAsyncClient asyncClient;
 
   @Before
   public void configureClientBuilderFactory() {
     MockClientBuilderFactory.set(p, KinesisClientBuilder.class, client);
-    MockClientBuilderFactory.set(p, KinesisAsyncClientBuilder.class, asyncClient);
     MockClientBuilderFactory.set(p, CloudWatchClientBuilder.class, mock(CloudWatchClient.class));
   }
 
@@ -116,16 +102,6 @@ public class KinesisIOReadTest {
     mockRecords(records, 10);
 
     readFromShards(identity(), concat(records));
-  }
-
-  @Test
-  public void testReadFromShardsWithEnhancedFanOut() {
-    List<List<Record>> records = testRecords(SHARDS, SHARD_EVENTS);
-    mockShards(SHARDS);
-    // TODO: getShardIterator() should not be called at all for enhanced fan-out
-    mockShardIterators(records);
-    mockSubscribe(records);
-    readFromShardsWithEnhancedFanOut(identity(), concat(records));
   }
 
   @Test
@@ -154,27 +130,9 @@ public class KinesisIOReadTest {
             .withStreamName("stream")
             .withInitialPositionInStream(TRIM_HORIZON)
             .withArrivalTimeWatermarkPolicy()
-            .withMaxNumRecords(SHARDS_EVENTS_TOTAL);
+            .withMaxNumRecords(SHARDS * SHARD_EVENTS);
 
     PCollection<Record> result = p.apply(fn.apply(read)).apply(ParDo.of(new ToRecord()));
-    PAssert.that(result.apply(Count.globally())).containsInAnyOrder(SHARDS_EVENTS_TOTAL);
-    PAssert.that(result).containsInAnyOrder(expected);
-    p.run();
-  }
-
-  private void readFromShardsWithEnhancedFanOut(
-      Function<Read, Read> fn, Iterable<Record> expected) {
-    Read read =
-        KinesisIO.read()
-            .withStreamName("stream-01")
-            .withConsumerArn(
-                "arn:aws:kinesis:eu-west-1:12345:stream/stream-01/consumer/consumer-01:18899")
-            .withInitialPositionInStream(TRIM_HORIZON)
-            .withArrivalTimeWatermarkPolicy()
-            .withMaxNumRecords(SHARDS_EVENTS_TOTAL);
-
-    PCollection<Record> result = p.apply(fn.apply(read)).apply(ParDo.of(new ToRecord()));
-    PAssert.that(result.apply(Count.globally())).containsInAnyOrder(SHARDS_EVENTS_TOTAL);
     PAssert.that(result).containsInAnyOrder(expected);
     p.run();
   }
@@ -238,71 +196,10 @@ public class KinesisIOReadTest {
     return req -> req != null && req.shardIterator().equals(id);
   }
 
-  private static ArgumentMatcher<SubscribeToShardRequest> subscribeHasShardId(String id) {
-    return req -> req != null && req.shardId().equals(id);
-  }
-
   private void mockShardIterators(List<List<Record>> data) {
     for (int id = 0; id < data.size(); id++) {
       when(client.getShardIterator(argThat(hasShardId(id))))
           .thenReturn(GetShardIteratorResponse.builder().shardIterator(id + ":0").build());
-    }
-  }
-
-  private void mockSubscribe(List<List<Record>> data) {
-    ArgumentCaptor<SubscribeToShardResponseHandler> captor =
-        ArgumentCaptor.forClass(SubscribeToShardResponseHandler.class);
-
-    for (int shard = 0; shard < data.size(); shard++) {
-      int finalShard = shard;
-      Runnable fakeRecordsPusher =
-          () -> {
-            // TODO: mess. Find nicer way of coding this out
-            try {
-              while (captor.getAllValues().size() < 3) {
-                Thread.sleep(100L);
-              }
-            } catch (InterruptedException e) {
-              throw new RuntimeException();
-            }
-
-            List<SubscribeToShardResponseHandler> responseHandlers = captor.getAllValues();
-
-            List<Record> records = data.get(finalShard);
-            SubscribeToShardResponseHandler responseHandler = responseHandlers.get(finalShard);
-            SubscribeToShardEventStream stream =
-                SubscribeToShardEventStream.subscribeToShardEventBuilder()
-                    .records(records)
-                    .millisBehindLatest(0L)
-                    .build();
-
-            SdkPublisher<SubscribeToShardEventStream> publisher =
-                s -> {
-                  AsyncPageFetcher<SubscribeToShardEventStream> fetcher =
-                      new AsyncPageFetcher<SubscribeToShardEventStream>() {
-                        @Override
-                        public boolean hasNextPage(SubscribeToShardEventStream oldPage) {
-                          return false;
-                        }
-
-                        @Override
-                        public CompletableFuture<SubscribeToShardEventStream> nextPage(
-                            SubscribeToShardEventStream oldPage) {
-                          return CompletableFuture.completedFuture(stream);
-                        }
-                      };
-                  s.onSubscribe(
-                      ResponsesSubscription.builder()
-                          .subscriber(s)
-                          .nextPageFetcher(fetcher)
-                          .build());
-                  s.onNext(stream);
-                };
-            responseHandler.onEventStream(publisher);
-          };
-      when(asyncClient.subscribeToShard(
-              argThat(subscribeHasShardId(Integer.toString(shard))), captor.capture()))
-          .thenReturn(CompletableFuture.runAsync(fakeRecordsPusher));
     }
   }
 
@@ -369,11 +266,6 @@ public class KinesisIOReadTest {
     @Override
     public KinesisClient getKinesisClient() {
       return get();
-    }
-
-    @Override
-    public KinesisAsyncClient getKinesisAsyncClient() {
-      return mock(KinesisAsyncClient.class);
     }
 
     @Override

@@ -17,7 +17,6 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional.fromNullable;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
 import java.io.IOException;
@@ -26,7 +25,6 @@ import org.apache.beam.sdk.coders.Coder;
 import org.apache.beam.sdk.coders.SerializableCoder;
 import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
-import org.apache.beam.sdk.io.aws2.kinesis.KinesisReaderCheckpoint;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecordCoder;
 import org.apache.beam.sdk.options.PipelineOptions;
@@ -47,7 +45,7 @@ public class KinesisEnhancedFanOutSource
     this(
         read,
         new DynamicCheckpointGenerator(
-            read.getStreamName(), fromNullable(read.getConsumerArn()), read.getInitialPosition()));
+            read.getStreamName(), read.getConsumerArn(), read.getInitialPosition()));
   }
 
   private KinesisEnhancedFanOutSource(KinesisIO.Read spec, CheckpointGenerator initialCheckpoint) {

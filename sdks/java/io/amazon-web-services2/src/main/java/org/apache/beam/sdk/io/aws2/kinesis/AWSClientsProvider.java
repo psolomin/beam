@@ -20,7 +20,6 @@ package org.apache.beam.sdk.io.aws2.kinesis;
 import java.io.Serializable;
 import org.apache.beam.sdk.io.aws2.options.AwsOptions;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
-import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 
 /**
@@ -32,8 +31,6 @@ import software.amazon.awssdk.services.kinesis.KinesisClient;
 @Deprecated
 public interface AWSClientsProvider extends Serializable {
   KinesisClient getKinesisClient();
-
-  KinesisAsyncClient getKinesisAsyncClient();
 
   CloudWatchClient getCloudWatchClient();
 }

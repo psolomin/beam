@@ -18,7 +18,6 @@
 package org.apache.beam.sdk.io.aws2.kinesis;
 
 import static org.apache.beam.sdk.io.aws2.common.ClientBuilderFactory.buildClient;
-import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional.fromNullable;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.Lists.newArrayList;
 
@@ -34,7 +33,6 @@ import org.apache.beam.sdk.options.PipelineOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
-import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 
 /** Represents source for single stream in Kinesis. */
@@ -49,10 +47,7 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
   private final CheckpointGenerator checkpointGenerator;
 
   KinesisSource(Read read) {
-    this(
-        read,
-        new DynamicCheckpointGenerator(
-            read.getStreamName(), fromNullable(read.getConsumerArn()), read.getInitialPosition()));
+    this(read, new DynamicCheckpointGenerator(read.getStreamName(), read.getInitialPosition()));
   }
 
   private KinesisSource(Read spec, CheckpointGenerator initialCheckpoint) {
@@ -63,20 +58,17 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
   private SimplifiedKinesisClient createClient(PipelineOptions options) {
     AwsOptions awsOptions = options.as(AwsOptions.class);
     Supplier<KinesisClient> kinesisSupplier;
-    Supplier<KinesisAsyncClient> kinesisAsyncSupplier;
     Supplier<CloudWatchClient> cloudWatchSupplier;
     if (spec.getAWSClientsProvider() != null) {
       kinesisSupplier = spec.getAWSClientsProvider()::getKinesisClient;
-      kinesisAsyncSupplier = spec.getAWSClientsProvider()::getKinesisAsyncClient;
       cloudWatchSupplier = spec.getAWSClientsProvider()::getCloudWatchClient;
     } else {
       ClientConfiguration config = spec.getClientConfiguration();
       kinesisSupplier = () -> buildClient(awsOptions, KinesisClient.builder(), config);
-      kinesisAsyncSupplier = () -> buildClient(awsOptions, KinesisAsyncClient.builder(), config);
       cloudWatchSupplier = () -> buildClient(awsOptions, CloudWatchClient.builder(), config);
     }
     return new SimplifiedKinesisClient(
-        kinesisSupplier, kinesisAsyncSupplier, cloudWatchSupplier, spec.getRequestRecordsLimit());
+        kinesisSupplier, cloudWatchSupplier, spec.getRequestRecordsLimit());
   }
 
   /**

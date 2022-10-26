@@ -19,11 +19,8 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import org.apache.beam.sdk.io.aws2.kinesis.KinesisReaderCheckpoint;
-import org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint;
 import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
-import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.Shard;
@@ -36,11 +33,11 @@ class DynamicCheckpointGenerator implements CheckpointGenerator {
 
   private static final Logger LOG = LoggerFactory.getLogger(DynamicCheckpointGenerator.class);
   private final String streamName;
-  private final Optional<String> consumerArn;
+  private final String consumerArn;
   private final StartingPoint startingPoint;
 
   public DynamicCheckpointGenerator(
-      String streamName, Optional<String> consumerArn, StartingPoint startingPoint) {
+      String streamName, String consumerArn, StartingPoint startingPoint) {
     this.streamName = streamName;
     this.consumerArn = consumerArn;
     this.startingPoint = startingPoint;

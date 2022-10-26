@@ -19,7 +19,6 @@ package org.apache.beam.sdk.io.aws2.kinesis;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.Shard;
@@ -32,13 +31,10 @@ class DynamicCheckpointGenerator implements CheckpointGenerator {
 
   private static final Logger LOG = LoggerFactory.getLogger(DynamicCheckpointGenerator.class);
   private final String streamName;
-  private final Optional<String> consumerArn;
   private final StartingPoint startingPoint;
 
-  public DynamicCheckpointGenerator(
-      String streamName, Optional<String> consumerArn, StartingPoint startingPoint) {
+  public DynamicCheckpointGenerator(String streamName, StartingPoint startingPoint) {
     this.streamName = streamName;
-    this.consumerArn = consumerArn;
     this.startingPoint = startingPoint;
   }
 
@@ -53,9 +49,7 @@ class DynamicCheckpointGenerator implements CheckpointGenerator {
         startingPoint.getTimestamp());
     return new KinesisReaderCheckpoint(
         streamShards.stream()
-            .map(
-                shard ->
-                    new ShardCheckpoint(streamName, consumerArn, shard.shardId(), startingPoint))
+            .map(shard -> new ShardCheckpoint(streamName, shard.shardId(), startingPoint))
             .collect(Collectors.toList()));
   }
 
