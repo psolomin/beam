@@ -62,13 +62,17 @@ public class KinesisEnhancedFanOutReaderTest {
     reader = new KinesisEnhancedFanOutReader(read, builder, checkpointGenerator, source);
     assertThat(reader.start()).isTrue();
     List<KinesisRecord> records = new ArrayList<>();
-    for (int i = 0; i < 12; i++) {
-      assertThat(reader.advance()).isTrue();
-      records.add(reader.getCurrent());
+    // 2 shards * (3 data records + 3 records without data) * 2 re-subscribes
+    int fetchAttempts = 24;
+    int recordIsPresentCnt = 0;
+
+    for (int i = 0; i < fetchAttempts; i++) {
+      if (reader.advance()) {
+        recordIsPresentCnt++;
+        records.add(reader.getCurrent());
+      }
     }
-    for (int i = 0; i < 12; i++) {
-      assertThat(reader.advance()).isFalse();
-    }
+    assertEquals(12, recordIsPresentCnt);
     assertEquals(12, records.size());
   }
 }

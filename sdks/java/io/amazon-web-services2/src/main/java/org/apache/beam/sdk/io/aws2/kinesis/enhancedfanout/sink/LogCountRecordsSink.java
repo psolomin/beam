@@ -17,7 +17,9 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
@@ -28,7 +30,8 @@ public class LogCountRecordsSink implements RecordsSink {
   private static final Integer printEveryN = 100;
 
   @Override
-  public void submit(String shardId, KinesisClientRecord record) {
+  public void submit(
+      String shardId, Optional<KinesisClientRecord> record, String continuationSequenceNumber) {
     Long current = counter.incrementAndGet();
     if (current % printEveryN == 0) {
       LOG.info("Received events total: {}", current);
@@ -36,8 +39,9 @@ public class LogCountRecordsSink implements RecordsSink {
   }
 
   @Override
-  public void submit(String shardId, Iterable<KinesisClientRecord> records) {
-    records.forEach(r -> submit(shardId, r));
+  public void submit(
+      String shardId, List<KinesisClientRecord> records, String continuationSequenceNumber) {
+    records.forEach(r -> submit(shardId, Optional.of(r), continuationSequenceNumber));
   }
 
   @Override

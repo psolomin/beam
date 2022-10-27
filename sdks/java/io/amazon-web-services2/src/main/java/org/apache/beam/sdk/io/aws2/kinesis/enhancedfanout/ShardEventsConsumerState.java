@@ -17,8 +17,13 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.Record;
 import org.joda.time.Instant;
 
 public interface ShardEventsConsumerState {
   Instant getShardWatermark();
+
+  void updateContinuationSequenceNumber(String continuationSequenceNumber);
+
+  void ackRecord(Record record, String continuationSequenceNumber);
 }

@@ -240,10 +240,16 @@ public class StreamConsumer implements Runnable {
     ShardCheckpoint checkpoint =
         new ShardCheckpoint(
             config.getStreamName(), config.getConsumerArn(), shardId, config.getStartingPoint());
+
     WatermarkPolicy watermarkPolicy =
         WatermarkPolicyFactory.withArrivalTimePolicy().createWatermarkPolicy();
+
     return new ShardEventsConsumerStateImpl(
-        shardId, checkpoint, watermarkPolicy, WatermarkPolicyFactory.withArrivalTimePolicy());
+        config.getStreamName(),
+        shardId,
+        checkpoint,
+        watermarkPolicy,
+        WatermarkPolicyFactory.withArrivalTimePolicy());
   }
 
   @SuppressWarnings("FutureReturnValueIgnored")
@@ -319,11 +325,18 @@ public class StreamConsumer implements Runnable {
 
   public CustomOptional<KinesisRecord> nextRecord() {
     Record record = recordsSink.fetch();
-    if (record != null)
-      return CustomOptional.of(
+    if (record == null) return CustomOptional.absent();
+
+    consumers.get(record.getShardId()).ackRecord(record);
+
+    if (record.getKinesisClientRecord().isPresent()) {
+      KinesisRecord kinesisRecord =
           new KinesisRecord(
-              record.getKinesisClientRecord(), config.getStreamName(), record.getShardId()));
-    else return CustomOptional.absent();
+              record.getKinesisClientRecord().get(), config.getStreamName(), record.getShardId());
+      return CustomOptional.of(kinesisRecord);
+    } else {
+      return CustomOptional.absent();
+    }
   }
 
   public Instant getWatermark() {

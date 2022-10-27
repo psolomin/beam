@@ -19,6 +19,7 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.collect.ImmutableList;
 import java.io.IOException;
 import java.util.List;
 import org.apache.beam.sdk.coders.Coder;
@@ -41,7 +42,7 @@ public class KinesisEnhancedFanOutSource
   private final KinesisIO.Read spec;
   private final CheckpointGenerator checkpointGenerator;
 
-  KinesisEnhancedFanOutSource(KinesisIO.Read read) {
+  public KinesisEnhancedFanOutSource(KinesisIO.Read read) {
     this(
         read,
         new DynamicCheckpointGenerator(
@@ -54,16 +55,23 @@ public class KinesisEnhancedFanOutSource
   }
 
   @Override
-  public List<? extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoint>> split(
-      int desiredNumSplits, PipelineOptions options) throws Exception {
-    return null;
+  public List<KinesisEnhancedFanOutSource> split(int desiredNumSplits, PipelineOptions options)
+      throws Exception {
+    return ImmutableList.of();
   }
 
   @Override
   public UnboundedReader<KinesisRecord> createReader(
       PipelineOptions options, @Nullable KinesisReaderCheckpoint checkpointMark)
       throws IOException {
-    return null;
+    CheckpointGenerator checkpointGenerator = this.checkpointGenerator;
+    if (checkpointMark != null) {
+      checkpointGenerator = new StaticCheckpointGenerator(checkpointMark);
+    }
+
+    ClientBuilder builder = new ClientBuilderImpl();
+    KinesisEnhancedFanOutSource source = new KinesisEnhancedFanOutSource(spec);
+    return new KinesisEnhancedFanOutReader(spec, builder, checkpointGenerator, source);
   }
 
   @Override

@@ -17,9 +17,11 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.Record;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.RecordsSink;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
@@ -92,22 +94,23 @@ class ShardEventsConsumer implements Runnable {
 
   private void consume(SubscribeToShardEvent event) {
     long recordsArrivedInBatch = 0L;
+    List<KinesisClientRecord> clientRecords;
     if (!event.records().isEmpty()) {
-      List<KinesisClientRecord> clientRecords =
+      clientRecords =
           new AggregatorUtil()
               .deaggregate(
                   event.records().stream()
                       .map(KinesisClientRecord::fromRecord)
                       .collect(Collectors.toList()));
-      processClientRecords(clientRecords);
       recordsArrivedInBatch = event.records().size();
-    }
+    } else clientRecords = Collections.emptyList();
 
+    recordsSink.submit(shardId, clientRecords, event.continuationSequenceNumber());
     shardProgress.setLastSequenceNumber(event.continuationSequenceNumber(), recordsArrivedInBatch);
   }
 
-  private void processClientRecords(List<KinesisClientRecord> clientRecords) {
-    recordsSink.submit(shardId, clientRecords);
+  void ackRecord(Record record) {
+    state.ackRecord(record, record.getContinuationSequenceNumber());
   }
 
   void initiateGracefulShutdown() {

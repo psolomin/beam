@@ -17,13 +17,16 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink;
 
+import java.util.List;
 import net.bytebuddy.utility.nullability.MaybeNull;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 public interface RecordsSink {
-  void submit(String shardId, KinesisClientRecord record);
+  void submit(
+      String shardId, Optional<KinesisClientRecord> record, String continuationSequenceNumber);
 
-  void submit(String shardId, Iterable<KinesisClientRecord> records);
+  void submit(String shardId, List<KinesisClientRecord> records, String continuationSequenceNumber);
 
   long getTotalCnt();
 
