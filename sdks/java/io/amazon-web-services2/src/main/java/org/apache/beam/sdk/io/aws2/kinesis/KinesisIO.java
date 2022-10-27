@@ -52,6 +52,7 @@ import org.apache.beam.sdk.io.aws2.common.ObjectPool;
 import org.apache.beam.sdk.io.aws2.common.ObjectPool.ClientPool;
 import org.apache.beam.sdk.io.aws2.common.RetryConfiguration;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisPartitioner.ExplicitPartitioner;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.KinesisEnhancedFanOutSource;
 import org.apache.beam.sdk.io.aws2.options.AwsOptions;
 import org.apache.beam.sdk.metrics.Counter;
 import org.apache.beam.sdk.metrics.Distribution;
@@ -545,8 +546,13 @@ public final class KinesisIO {
         ClientBuilderFactory.validate(awsOptions, getClientConfiguration());
       }
 
-      Unbounded<KinesisRecord> unbounded =
-          org.apache.beam.sdk.io.Read.from(new KinesisSource(this));
+      Unbounded<KinesisRecord> unbounded;
+
+      if (getConsumerArn() == null)
+        unbounded = org.apache.beam.sdk.io.Read.from(new KinesisSource(this));
+      else {
+        unbounded = org.apache.beam.sdk.io.Read.from(new KinesisEnhancedFanOutSource(this));
+      }
 
       PTransform<PBegin, PCollection<KinesisRecord>> transform = unbounded;
 

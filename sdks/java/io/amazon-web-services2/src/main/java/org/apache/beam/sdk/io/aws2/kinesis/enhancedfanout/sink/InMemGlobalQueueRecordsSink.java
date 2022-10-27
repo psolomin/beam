@@ -17,10 +17,12 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink;
 
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import net.bytebuddy.utility.nullability.MaybeNull;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
@@ -34,9 +36,11 @@ public class InMemGlobalQueueRecordsSink implements RecordsSink {
   private final BlockingQueue<Record> queue = new LinkedBlockingQueue<>(MAX_CAPACITY);
 
   @Override
-  public void submit(String shardId, KinesisClientRecord record) {
+  public void submit(
+      String shardId, Optional<KinesisClientRecord> record, String continuationSequenceNumber) {
     try {
-      if (!queue.offer(new Record(shardId, record), QUEUE_OFFER_TIMEOUT_MS, TimeUnit.MILLISECONDS))
+      Record r = new Record(shardId, record, continuationSequenceNumber);
+      if (!queue.offer(r, QUEUE_OFFER_TIMEOUT_MS, TimeUnit.MILLISECONDS))
         throw new RuntimeException(
             String.format(
                 "Queue overloaded, " + "failed to push event from shard %s after %s ms",
@@ -48,8 +52,10 @@ public class InMemGlobalQueueRecordsSink implements RecordsSink {
   }
 
   @Override
-  public void submit(String shardId, Iterable<KinesisClientRecord> records) {
-    records.forEach(r -> submit(shardId, r));
+  public void submit(
+      String shardId, List<KinesisClientRecord> records, String continuationSequenceNumber) {
+    if (records.isEmpty()) submit(shardId, Optional.absent(), continuationSequenceNumber);
+    else records.forEach(r -> submit(shardId, Optional.of(r), continuationSequenceNumber));
   }
 
   @Override

@@ -17,27 +17,38 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
+import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.WatermarkPolicy;
 import org.apache.beam.sdk.io.aws2.kinesis.WatermarkPolicyFactory;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.Record;
 import org.joda.time.Instant;
+import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 public class ShardEventsConsumerStateImpl implements ShardEventsConsumerState {
+  private final String streamName;
   private final String shardId;
-  private final ShardCheckpoint shardCheckpoint;
   private final WatermarkPolicy watermarkPolicy;
   private final WatermarkPolicyFactory watermarkPolicyFactory;
   private final WatermarkPolicy latestRecordTimestampPolicy =
       WatermarkPolicyFactory.withArrivalTimePolicy().createWatermarkPolicy();
 
+  private ShardCheckpoint shardCheckpoint;
+
   public ShardEventsConsumerStateImpl(
+      String streamName,
       String shardId,
       ShardCheckpoint shardCheckpoint,
       WatermarkPolicy watermarkPolicy,
       WatermarkPolicyFactory watermarkPolicyFactory) {
+    this.streamName = streamName;
     this.shardId = shardId;
     this.shardCheckpoint = shardCheckpoint;
     this.watermarkPolicy = watermarkPolicy;
     this.watermarkPolicyFactory = watermarkPolicyFactory;
+  }
+
+  public String getStreamName() {
+    return streamName;
   }
 
   public String getShardId() {
@@ -47,6 +58,22 @@ public class ShardEventsConsumerStateImpl implements ShardEventsConsumerState {
   @Override
   public Instant getShardWatermark() {
     return watermarkPolicy.getWatermark();
+  }
+
+  @Override
+  public void updateContinuationSequenceNumber(String continuationSequenceNumber) {}
+
+  @Override
+  public void ackRecord(Record record, String continuationSequenceNumber) {
+    if (record.getKinesisClientRecord().isPresent()) {
+      KinesisClientRecord clientRecord = record.getKinesisClientRecord().get();
+      KinesisRecord convertedRecord = new KinesisRecord(clientRecord, streamName, shardId);
+      shardCheckpoint = shardCheckpoint.moveAfter(convertedRecord, continuationSequenceNumber);
+      watermarkPolicy.update(convertedRecord);
+      latestRecordTimestampPolicy.update(convertedRecord);
+    } else {
+      shardCheckpoint = shardCheckpoint.moveAfter(continuationSequenceNumber);
+    }
   }
 
   public ShardCheckpoint getShardCheckpoint() {

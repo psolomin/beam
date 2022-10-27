@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 public class InMemCollectionRecordsSink implements RecordsSink {
@@ -34,13 +35,16 @@ public class InMemCollectionRecordsSink implements RecordsSink {
   }
 
   @Override
-  public void submit(String shardId, KinesisClientRecord record) {
-    addSingleRecord(shardId, record);
+  public void submit(
+      String shardId, Optional<KinesisClientRecord> record, String continuationSequenceNumber) {
+    if (record.isPresent()) addSingleRecord(shardId, record.get());
   }
 
   @Override
-  public void submit(String shardId, Iterable<KinesisClientRecord> records) {
-    records.forEach(r -> addSingleRecord(shardId, r));
+  public void submit(
+      String shardId, List<KinesisClientRecord> records, String continuationSequenceNumber) {
+    if (records.isEmpty()) submit(shardId, Optional.absent(), continuationSequenceNumber);
+    else records.forEach(r -> submit(shardId, Optional.of(r), continuationSequenceNumber));
   }
 
   @Override

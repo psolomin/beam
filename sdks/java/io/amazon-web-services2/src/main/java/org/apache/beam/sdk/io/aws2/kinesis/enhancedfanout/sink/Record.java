@@ -18,23 +18,33 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink;
 
 import java.util.Objects;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 public class Record {
   private final String shardId;
-  private final KinesisClientRecord kinesisClientRecord;
+  private final Optional<KinesisClientRecord> kinesisClientRecord;
+  private final String continuationSequenceNumber;
 
-  public Record(String shardId, KinesisClientRecord kinesisClientRecord) {
+  public Record(
+      String shardId,
+      Optional<KinesisClientRecord> kinesisClientRecord,
+      String continuationSequenceNumber) {
     this.shardId = shardId;
     this.kinesisClientRecord = kinesisClientRecord;
+    this.continuationSequenceNumber = continuationSequenceNumber;
   }
 
   public String getShardId() {
     return shardId;
   }
 
-  public KinesisClientRecord getKinesisClientRecord() {
+  public Optional<KinesisClientRecord> getKinesisClientRecord() {
     return kinesisClientRecord;
+  }
+
+  public String getContinuationSequenceNumber() {
+    return continuationSequenceNumber;
   }
 
   @Override
@@ -42,11 +52,13 @@ public class Record {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
     Record record = (Record) o;
-    return shardId.equals(record.shardId) && kinesisClientRecord.equals(record.kinesisClientRecord);
+    return shardId.equals(record.shardId)
+        && kinesisClientRecord.equals(record.kinesisClientRecord)
+        && continuationSequenceNumber.equals(record.continuationSequenceNumber);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(shardId, kinesisClientRecord);
+    return Objects.hash(shardId, kinesisClientRecord, continuationSequenceNumber);
   }
 }
