@@ -87,7 +87,7 @@ public class ShardsProgressHistory {
     ListShardsResponse response = tryListingShards(listShardsRequest, builder);
     Map<String, ShardProgress> progressMap = new HashMap<>();
     response.shards().stream()
-        .map(s -> new ShardProgress(config, s.shardId()))
+        .map(s -> new ShardProgress(s.shardId()))
         .forEach(s -> progressMap.put(s.getShardId(), s));
     return new ShardsProgressHistory(progressMap);
   }
@@ -110,15 +110,5 @@ public class ShardsProgressHistory {
 
   Map<String, ShardProgress> shardsProgress() {
     return shardsProgress;
-  }
-
-  void addShard(String shardId, ShardProgress progress) {
-    if (shardsProgress.putIfAbsent(shardId, progress) != null) {
-      throw new IllegalStateException(String.format("Attempted to overwrite %s", shardId));
-    }
-  }
-
-  boolean shardHistoryExists(String shardId) {
-    return shardsProgress.containsKey(shardId);
   }
 }
