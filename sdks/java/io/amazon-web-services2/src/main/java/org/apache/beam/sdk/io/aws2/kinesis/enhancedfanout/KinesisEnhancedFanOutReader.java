@@ -19,8 +19,8 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.common.collect.ImmutableList;
 import java.io.IOException;
+import java.util.List;
 import java.util.NoSuchElementException;
 import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
@@ -75,7 +75,9 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
     Config config =
         new Config(spec.getStreamName(), spec.getConsumerArn(), spec.getInitialPosition());
     RecordsSink sink = new InMemGlobalQueueRecordsSink();
-    KinesisReaderCheckpoint initialCheckpoint = new KinesisReaderCheckpoint(ImmutableList.of());
+    List<ShardCheckpoint> checkpoints =
+        ShardsListingUtils.initSubscribedShardsProgressInfo(config, clientBuilder);
+    KinesisReaderCheckpoint initialCheckpoint = new KinesisReaderCheckpoint(checkpoints);
     streamConsumer = StreamConsumer.init(config, clientBuilder, initialCheckpoint, sink);
     return streamConsumer.isRunning();
   }
