@@ -17,10 +17,9 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.ShardsProgressHistory.getShardsAfterParent;
+import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.ShardsListingUtils.getShardsAfterParent;
 
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -67,13 +66,13 @@ public class StreamConsumer implements Runnable {
   private final Config config;
   private final ClientBuilder clientBuilder;
   private final ExecutorService executorService;
-  private final ShardsProgressHistory progressTracker;
   private final Map<String, ShardEventsConsumer> consumers = new ConcurrentHashMap<>();
   private final BlockingQueue<ShardSubscriberSignal> signals =
       new LinkedBlockingQueue<>(Integer.MAX_VALUE);
   private final AtomicBoolean isRunning = new AtomicBoolean(false);
   private final RecordsSink recordsSink;
   private final CountDownLatch consumerStartedLatch;
+  private final KinesisReaderCheckpoint initialCheckpoint;
 
   private StreamConsumer(
       Config config,
@@ -86,11 +85,9 @@ public class StreamConsumer implements Runnable {
     this.config = config;
     this.clientBuilder = clientBuilder;
     this.executorService = createThreadPool(config);
-    this.progressTracker =
-        ShardsProgressHistory.initSubscribedShardsProgressInfo(
-            config, initialCheckpoint, clientBuilder);
     this.recordsSink = recordsSink;
     this.consumerStartedLatch = consumerStartedLatch;
+    this.initialCheckpoint = initialCheckpoint;
   }
 
   public static StreamConsumer init(
@@ -207,7 +204,7 @@ public class StreamConsumer implements Runnable {
 
   @Override
   public void run() {
-    submitShardConsumersTasks();
+    submitShardConsumersTasks(initialCheckpoint);
     isRunning.set(true);
     LOG.info(LOG_MSG_TEMPLATE + " Started", config.getStreamName(), config.getConsumerArn());
     consumerStartedLatch.countDown();
@@ -229,19 +226,17 @@ public class StreamConsumer implements Runnable {
   }
 
   @SuppressWarnings("FutureReturnValueIgnored")
-  private void submitShardConsumersTasks() {
-    Map<String, ShardEventsConsumer> shardConsumerMap = new HashMap<>();
-    progressTracker
-        .shardsProgress()
-        .forEach(
-            (k, v) -> {
-              ShardEventsConsumerState state = initState(k);
-              shardConsumerMap.put(
-                  k,
-                  ShardEventsConsumer.fromShardEventsConsumerState(
-                      this, config, clientBuilder, recordsSink, state));
-            });
-    consumers.putAll(shardConsumerMap);
+  private void submitShardConsumersTasks(KinesisReaderCheckpoint initialCheckpoint) {
+    ImmutableMap.Builder<String, ShardEventsConsumer> shardsConsumers = ImmutableMap.builder();
+    for (ShardCheckpoint checkpoint : initialCheckpoint) {
+      ShardEventsConsumerState state = initState(checkpoint.getShardId());
+      ShardEventsConsumer consumer =
+          ShardEventsConsumer.fromShardEventsConsumerState(
+              this, config, clientBuilder, recordsSink, state);
+      shardsConsumers.put(checkpoint.getShardId(), consumer);
+    }
+
+    consumers.putAll(shardsConsumers.build());
     consumers.values().forEach(executorService::submit);
   }
 

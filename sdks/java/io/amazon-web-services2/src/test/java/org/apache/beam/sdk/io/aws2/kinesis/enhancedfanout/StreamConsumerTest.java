@@ -57,8 +57,9 @@ public class StreamConsumerTest {
   }
 
   private StreamConsumer createConsumer(Config config, ClientBuilder builder) {
-    KinesisReaderCheckpoint initialCheckpoint =
-        new KinesisReaderCheckpoint(com.google.common.collect.ImmutableList.of());
+    List<ShardCheckpoint> checkpoints =
+        ShardsListingUtils.initSubscribedShardsProgressInfo(config, builder);
+    KinesisReaderCheckpoint initialCheckpoint = new KinesisReaderCheckpoint(checkpoints);
     RecordsSink sink = new InMemGlobalQueueRecordsSink();
     return StreamConsumer.init(config, builder, initialCheckpoint, sink);
   }
