@@ -19,6 +19,7 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.collect.ImmutableList;
 import java.io.IOException;
 import java.util.NoSuchElementException;
 import org.apache.beam.sdk.io.UnboundedSource;
@@ -74,7 +75,8 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
     Config config =
         new Config(spec.getStreamName(), spec.getConsumerArn(), spec.getInitialPosition());
     RecordsSink sink = new InMemGlobalQueueRecordsSink();
-    streamConsumer = StreamConsumer.init(config, clientBuilder, sink);
+    KinesisReaderCheckpoint initialCheckpoint = new KinesisReaderCheckpoint(ImmutableList.of());
+    streamConsumer = StreamConsumer.init(config, clientBuilder, initialCheckpoint, sink);
     return streamConsumer.isRunning();
   }
 
@@ -118,7 +120,7 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
 
   @Override
   public UnboundedSource.CheckpointMark getCheckpointMark() {
-    return null;
+    return streamConsumer.getCheckpointMark();
   }
 
   @Override

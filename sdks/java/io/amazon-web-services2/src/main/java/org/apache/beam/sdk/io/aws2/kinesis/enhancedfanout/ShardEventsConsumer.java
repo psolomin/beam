@@ -36,7 +36,6 @@ class ShardEventsConsumer implements Runnable {
   private AtomicBoolean isRunning;
   private final String shardId;
   private final ShardSubscriber shardSubscriber;
-  private final ShardProgress shardProgress;
   private final RecordsSink recordsSink;
   private final ShardEventsConsumerState state;
 
@@ -46,7 +45,6 @@ class ShardEventsConsumer implements Runnable {
       ClientBuilder builder,
       RecordsSink recordsSink,
       String shardId,
-      ShardProgress shardProgress,
       ShardEventsConsumerState state) {
     this.shardId = shardId;
     this.shardSubscriber =
@@ -56,34 +54,33 @@ class ShardEventsConsumer implements Runnable {
             config.getStreamName(),
             config.getConsumerArn(),
             shardId);
-    this.shardProgress = shardProgress;
     this.recordsSink = recordsSink;
     this.state = state;
     this.isRunning = new AtomicBoolean(true);
   }
 
-  static ShardEventsConsumer fromShardProgress(
+  static ShardEventsConsumer fromShardEventsConsumerState(
       StreamConsumer streamConsumer,
       Config config,
       ClientBuilder builder,
       RecordsSink recordsSink,
-      ShardProgress progress,
       ShardEventsConsumerState state) {
     return new ShardEventsConsumer(
-        streamConsumer, config, builder, recordsSink, progress.getShardId(), progress, state);
+        streamConsumer, config, builder, recordsSink, state.getShardId(), state);
   }
 
   @Override
   public void run() {
     while (isRunning.get()) {
       try {
-        StartingPosition startingPosition = shardProgress.computeNextStartingPosition();
+        StartingPosition startingPosition = state.computeNextStartingPosition();
         LOG.info("Shard {} - Starting subscription with position = {}", shardId, startingPosition);
         boolean reSubscribe = shardSubscriber.subscribe(startingPosition, this::consume);
-        if (!reSubscribe) {
-          isRunning.set(false);
-        } else {
+        boolean bufferIsEmpty = recordsSink.waitUntilEmpty(shardId);
+        if (reSubscribe && bufferIsEmpty) {
           LOG.info("Will re-subscribe");
+        } else {
+          isRunning.set(false);
         }
 
       } catch (InterruptedException e) {
@@ -93,7 +90,6 @@ class ShardEventsConsumer implements Runnable {
   }
 
   private void consume(SubscribeToShardEvent event) {
-    long recordsArrivedInBatch = 0L;
     List<KinesisClientRecord> clientRecords;
     if (!event.records().isEmpty()) {
       clientRecords =
@@ -102,11 +98,8 @@ class ShardEventsConsumer implements Runnable {
                   event.records().stream()
                       .map(KinesisClientRecord::fromRecord)
                       .collect(Collectors.toList()));
-      recordsArrivedInBatch = event.records().size();
     } else clientRecords = Collections.emptyList();
-
     recordsSink.submit(shardId, clientRecords, event.continuationSequenceNumber());
-    shardProgress.setLastSequenceNumber(event.continuationSequenceNumber(), recordsArrivedInBatch);
   }
 
   void ackRecord(Record record) {
@@ -120,5 +113,13 @@ class ShardEventsConsumer implements Runnable {
 
   public static Instant getShardWatermark(ShardEventsConsumer shardEventsConsumer) {
     return shardEventsConsumer.state.getShardWatermark();
+  }
+
+  public ShardCheckpoint getCheckpoint() {
+    return state.getShardCheckpoint();
+  }
+
+  public boolean isRunning() {
+    return isRunning.get();
   }
 }

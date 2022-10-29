@@ -22,6 +22,7 @@ import org.apache.beam.sdk.io.aws2.kinesis.WatermarkPolicy;
 import org.apache.beam.sdk.io.aws2.kinesis.WatermarkPolicyFactory;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.Record;
 import org.joda.time.Instant;
+import software.amazon.awssdk.services.kinesis.model.StartingPosition;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 public class ShardEventsConsumerStateImpl implements ShardEventsConsumerState {
@@ -51,6 +52,7 @@ public class ShardEventsConsumerStateImpl implements ShardEventsConsumerState {
     return streamName;
   }
 
+  @Override
   public String getShardId() {
     return shardId;
   }
@@ -59,9 +61,6 @@ public class ShardEventsConsumerStateImpl implements ShardEventsConsumerState {
   public Instant getShardWatermark() {
     return watermarkPolicy.getWatermark();
   }
-
-  @Override
-  public void updateContinuationSequenceNumber(String continuationSequenceNumber) {}
 
   @Override
   public void ackRecord(Record record, String continuationSequenceNumber) {
@@ -76,6 +75,12 @@ public class ShardEventsConsumerStateImpl implements ShardEventsConsumerState {
     }
   }
 
+  @Override
+  public StartingPosition computeNextStartingPosition() {
+    return shardCheckpoint.toStartingPosition();
+  }
+
+  @Override
   public ShardCheckpoint getShardCheckpoint() {
     return shardCheckpoint;
   }

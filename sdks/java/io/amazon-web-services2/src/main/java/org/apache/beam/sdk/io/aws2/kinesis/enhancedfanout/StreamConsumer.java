@@ -46,11 +46,13 @@ import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals.ShardSubscribe
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.Record;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.RecordsSink;
 import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableMap;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 
 public class StreamConsumer implements Runnable {
@@ -76,26 +78,33 @@ public class StreamConsumer implements Runnable {
   private StreamConsumer(
       Config config,
       ClientBuilder clientBuilder,
+      KinesisReaderCheckpoint initialCheckpoint,
       RecordsSink recordsSink,
       CountDownLatch consumerStartedLatch) {
     LOG.info(LOG_MSG_TEMPLATE + " Creating pool", config.getStreamName(), config.getConsumerArn());
+
     this.config = config;
     this.clientBuilder = clientBuilder;
     this.executorService = createThreadPool(config);
     this.progressTracker =
-        ShardsProgressHistory.initSubscribedShardsProgressInfo(config, clientBuilder);
+        ShardsProgressHistory.initSubscribedShardsProgressInfo(
+            config, initialCheckpoint, clientBuilder);
     this.recordsSink = recordsSink;
     this.consumerStartedLatch = consumerStartedLatch;
   }
 
   public static StreamConsumer init(
-      Config config, ClientBuilder clientBuilder, RecordsSink recordsSink) {
+      Config config,
+      ClientBuilder clientBuilder,
+      KinesisReaderCheckpoint initialCheckpoint,
+      RecordsSink recordsSink) {
     String coordinatorName =
         String.format(
             "shard-consumers-pool-coordinator-%s-%s",
             config.getStreamName(), config.getConsumerArn());
     CountDownLatch latch = new CountDownLatch(1);
-    StreamConsumer streamConsumer = new StreamConsumer(config, clientBuilder, recordsSink, latch);
+    StreamConsumer streamConsumer =
+        new StreamConsumer(config, clientBuilder, initialCheckpoint, recordsSink, latch);
     Thread t = new Thread(streamConsumer, coordinatorName);
     t.setDaemon(true);
     t.start();
@@ -229,11 +238,31 @@ public class StreamConsumer implements Runnable {
               ShardEventsConsumerState state = initState(k);
               shardConsumerMap.put(
                   k,
-                  ShardEventsConsumer.fromShardProgress(
-                      this, config, clientBuilder, recordsSink, v, state));
+                  ShardEventsConsumer.fromShardEventsConsumerState(
+                      this, config, clientBuilder, recordsSink, state));
             });
     consumers.putAll(shardConsumerMap);
     consumers.values().forEach(executorService::submit);
+  }
+
+  private ShardEventsConsumerState initState(String shardId, String continuationSequenceNumber) {
+    ShardCheckpoint checkpoint =
+        new ShardCheckpoint(
+            config.getStreamName(),
+            config.getConsumerArn(),
+            shardId,
+            ShardIteratorType.AFTER_SEQUENCE_NUMBER,
+            continuationSequenceNumber,
+            null);
+
+    WatermarkPolicy watermarkPolicy =
+        WatermarkPolicyFactory.withArrivalTimePolicy().createWatermarkPolicy();
+    return new ShardEventsConsumerStateImpl(
+        config.getStreamName(),
+        shardId,
+        checkpoint,
+        watermarkPolicy,
+        WatermarkPolicyFactory.withArrivalTimePolicy());
   }
 
   private ShardEventsConsumerState initState(String shardId) {
@@ -259,26 +288,19 @@ public class StreamConsumer implements Runnable {
     List<ChildShard> childShards = reShardSignal.getChildShards();
     List<Shard> newShards = waitForNewShards(receivedFromShardId, childShards);
 
-    if (consumers.containsKey(receivedFromShardId)) {
-      LOG.info("Stopping {} upon signal {}", receivedFromShardId, reShardSignal);
-      ShardEventsConsumer oldConsumer = consumers.get(receivedFromShardId);
-      oldConsumer.initiateGracefulShutdown();
-      consumers.remove(receivedFromShardId);
-    }
+    LOG.info("Stopping {} upon signal {}", receivedFromShardId, reShardSignal);
+    consumers.get(receivedFromShardId).initiateGracefulShutdown();
 
     newShards.forEach(
         newShard -> {
           String id = newShard.shardId();
-          if (!progressTracker.shardHistoryExists(id) && !consumers.containsKey(id)) {
+          if (!consumers.containsKey(id)) {
             LOG.info("Starting {} upon signal {}", id, reShardSignal);
             String beginningSeqNumber = newShard.sequenceNumberRange().startingSequenceNumber();
-            ShardProgress progress = new ShardProgress(config, id, beginningSeqNumber);
-            progressTracker.addShard(id, progress);
-
-            ShardEventsConsumerState state = initState(id);
+            ShardEventsConsumerState state = initState(id, beginningSeqNumber);
             ShardEventsConsumer newConsumer =
-                ShardEventsConsumer.fromShardProgress(
-                    this, config, clientBuilder, recordsSink, progress, state);
+                ShardEventsConsumer.fromShardEventsConsumerState(
+                    this, config, clientBuilder, recordsSink, state);
             consumers.put(id, newConsumer);
             executorService.submit(newConsumer);
           }
@@ -328,7 +350,6 @@ public class StreamConsumer implements Runnable {
     if (record == null) return CustomOptional.absent();
 
     consumers.get(record.getShardId()).ackRecord(record);
-
     if (record.getKinesisClientRecord().isPresent()) {
       KinesisRecord kinesisRecord =
           new KinesisRecord(
@@ -348,5 +369,13 @@ public class StreamConsumer implements Runnable {
         .map(timestampExtractor)
         .min(Comparator.naturalOrder())
         .orElse(BoundedWindow.TIMESTAMP_MAX_VALUE);
+  }
+
+  public KinesisReaderCheckpoint getCheckpointMark() {
+    ImmutableMap<String, ShardEventsConsumer> currentConsumers = ImmutableMap.copyOf(consumers);
+    return new KinesisReaderCheckpoint(
+        currentConsumers.values().stream()
+            .map(ShardEventsConsumer::getCheckpoint)
+            .collect(Collectors.toList()));
   }
 }

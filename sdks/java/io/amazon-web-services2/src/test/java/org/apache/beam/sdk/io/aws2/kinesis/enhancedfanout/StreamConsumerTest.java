@@ -21,12 +21,17 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
+import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.KinesisClientBuilderStub;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.KinesisClientProxyStubBehaviours;
-import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.InMemCollectionRecordsSink;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.InMemGlobalQueueRecordsSink;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.RecordsSink;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 import org.junit.After;
 import org.junit.Test;
@@ -51,20 +56,25 @@ public class StreamConsumerTest {
     assertFalse(consumer.isRunning());
   }
 
+  private StreamConsumer createConsumer(Config config, ClientBuilder builder) {
+    KinesisReaderCheckpoint initialCheckpoint =
+        new KinesisReaderCheckpoint(com.google.common.collect.ImmutableList.of());
+    RecordsSink sink = new InMemGlobalQueueRecordsSink();
+    return StreamConsumer.init(config, builder, initialCheckpoint, sink);
+  }
+
   @Test
   public void consumesAllEventsFromMultipleShards() throws InterruptedException {
     Config config = new Config(STREAM_NAME, CONSUMER_ARN, startingPoint);
     KinesisClientBuilderStub builder = KinesisClientProxyStubBehaviours.twoShardsWithRecords();
-
-    InMemCollectionRecordsSink sink = new InMemCollectionRecordsSink();
-    consumer = StreamConsumer.init(config, builder, sink);
-    Thread.sleep(1_000L);
+    consumer = createConsumer(config, builder);
+    List<KinesisRecord> records = waitForRecords(consumer, 12);
     int expectedRecordsCntPerShard = 6;
     checkEventsCnt(
         expectedRecordsCntPerShard,
         ImmutableList.of("shard-000", "shard-001"),
         ImmutableList.of(),
-        sink);
+        records);
     // 2 shards x (1 initial subscribe + 2 re-subscribes)
     assertEquals(6, builder.subscribeRequestsSeen().size());
     List<SubscribeToShardRequest> expectedSubscribeRequests =
@@ -85,13 +95,12 @@ public class StreamConsumerTest {
     KinesisClientBuilderStub builder =
         KinesisClientProxyStubBehaviours.twoShardsWithRecordsAndShardUp();
 
-    InMemCollectionRecordsSink sink = new InMemCollectionRecordsSink();
-    consumer = StreamConsumer.init(config, builder, sink);
-    Thread.sleep(1_000L);
+    consumer = createConsumer(config, builder);
+    List<KinesisRecord> records = waitForRecords(consumer, 42);
     int expectedRecordsCntPerShard = 7;
     List<String> parentShards = ImmutableList.of("shard-000", "shard-001");
     List<String> childShards = ImmutableList.of("shard-002", "shard-003", "shard-004", "shard-005");
-    checkEventsCnt(expectedRecordsCntPerShard, parentShards, childShards, sink);
+    checkEventsCnt(expectedRecordsCntPerShard, parentShards, childShards, records);
     // 2 shards with initial subscribe + 4 new shards with initial subscribe
     assertEquals(6, builder.subscribeRequestsSeen().size());
     List<SubscribeToShardRequest> expectedSubscribeRequests =
@@ -112,14 +121,13 @@ public class StreamConsumerTest {
     KinesisClientBuilderStub builder =
         KinesisClientProxyStubBehaviours.fourShardsWithRecordsAndShardDown();
 
-    InMemCollectionRecordsSink sink = new InMemCollectionRecordsSink();
-    consumer = StreamConsumer.init(config, builder, sink);
-    Thread.sleep(1_000L);
+    consumer = createConsumer(config, builder);
+    List<KinesisRecord> records = waitForRecords(consumer, 77);
     int expectedRecordsCntPerShard = 11;
     List<String> parentShards =
         ImmutableList.of("shard-000", "shard-001", "shard-002", "shard-003");
     List<String> childShards = ImmutableList.of("shard-004", "shard-005", "shard-006");
-    checkEventsCnt(expectedRecordsCntPerShard, parentShards, childShards, sink);
+    checkEventsCnt(expectedRecordsCntPerShard, parentShards, childShards, records);
     // 4 shards with initial subscribe + 3 new shards with initial subscribe
     int expectedSubscribeRequests = 7;
     assertEquals(expectedSubscribeRequests, builder.subscribeRequestsSeen().size());
@@ -130,11 +138,9 @@ public class StreamConsumerTest {
   public void consumersNoEventsFromEmptyShards() throws InterruptedException {
     Config config = new Config(STREAM_NAME, CONSUMER_ARN, startingPoint);
     KinesisClientBuilderStub builder = KinesisClientProxyStubBehaviours.twoShardsEmpty();
-
-    InMemCollectionRecordsSink sink = new InMemCollectionRecordsSink();
-    consumer = StreamConsumer.init(config, builder, sink);
-    Thread.sleep(1_000L);
-    assertTrue(sink.shardsSeen().isEmpty());
+    consumer = createConsumer(config, builder);
+    List<KinesisRecord> records = waitForRecords(consumer, 0, 6);
+    assertTrue(records.isEmpty());
     // 2 shards x (1 initial subscribe + 2 re-subscribes)
     int expectedSubscribeRequests = 6;
     assertEquals(expectedSubscribeRequests, builder.subscribeRequestsSeen().size());
@@ -147,9 +153,8 @@ public class StreamConsumerTest {
     KinesisClientBuilderStub builder =
         KinesisClientProxyStubBehaviours.twoShardsWithRecordsOneShardError();
 
-    InMemCollectionRecordsSink sink = new InMemCollectionRecordsSink();
-    consumer = StreamConsumer.init(config, builder, sink);
-    Thread.sleep(1_000L);
+    consumer = createConsumer(config, builder);
+    Thread.sleep(500);
     assertFalse(consumer.isRunning());
   }
 
@@ -159,15 +164,14 @@ public class StreamConsumerTest {
     KinesisClientBuilderStub builder =
         KinesisClientProxyStubBehaviours.twoShardsWithRecordsOneShardRecoverableError();
 
-    InMemCollectionRecordsSink sink = new InMemCollectionRecordsSink();
-    consumer = StreamConsumer.init(config, builder, sink);
-    Thread.sleep(1_000L);
+    consumer = createConsumer(config, builder);
+    List<KinesisRecord> records = waitForRecords(consumer, 20);
     int expectedRecordsCntPerShard = 10;
     checkEventsCnt(
         expectedRecordsCntPerShard,
         ImmutableList.of("shard-000", "shard-001"),
         ImmutableList.of(),
-        sink);
+        records);
     // 2 shards x (1 initial subscribe + 2 re-subscribes)
     int expectedSubscribeRequests = 6;
     assertEquals(expectedSubscribeRequests, builder.subscribeRequestsSeen().size());
@@ -178,12 +182,19 @@ public class StreamConsumerTest {
       int expectedRecordsCntPerShard,
       List<String> parentShards,
       List<String> childShards,
-      InMemCollectionRecordsSink sink) {
+      List<KinesisRecord> records) {
+
     Stream.of(parentShards, childShards)
         .flatMap(List::stream)
         .forEach(
-            shardId ->
-                assertEquals(expectedRecordsCntPerShard, sink.getAllRecords(shardId).size()));
+            shardId -> {
+              List<KinesisRecord> filtered =
+                  records.stream()
+                      .filter(kr -> kr.getShardId().equals(shardId))
+                      .collect(Collectors.toList());
+              String msg = String.format("Shard %s did not get all expected records.", shardId);
+              assertEquals(msg, expectedRecordsCntPerShard, filtered.size());
+            });
   }
 
   private static SubscribeToShardRequest subscribeLatest(String shardId) {
@@ -204,5 +215,25 @@ public class StreamConsumerTest {
                 .sequenceNumber(seqNumber)
                 .build())
         .build();
+  }
+
+  private static List<KinesisRecord> waitForRecords(
+      StreamConsumer consumer, int expectedRecordsCnt, int maxAttempts) {
+    int attemptNo = 0;
+    List<KinesisRecord> records = new ArrayList<>();
+
+    while (attemptNo < maxAttempts) {
+      attemptNo++;
+      CustomOptional<KinesisRecord> maybeRecord = consumer.nextRecord();
+      if (maybeRecord.isPresent()) records.add(maybeRecord.get());
+    }
+
+    assertEquals(expectedRecordsCnt, records.size());
+    return records;
+  }
+
+  private static List<KinesisRecord> waitForRecords(
+      StreamConsumer consumer, int expectedRecordsCnt) {
+    return waitForRecords(consumer, expectedRecordsCnt, expectedRecordsCnt * 3);
   }
 }
