@@ -139,6 +139,7 @@ class ShardSubscriber {
       switch (event.type()) {
         case SUBSCRIPTION_COMPLETE:
           {
+            LOG.info("Shard {} - subscription complete", shardId);
             return true;
           }
         case ERROR:
@@ -205,7 +206,8 @@ class ShardSubscriber {
   }
 
   void cancel() {
-    shardEventsHandler.cancel();
+    if (isActive.get()) shardEventsHandler.cancel();
+
     int attemptNo = 1;
     while (!queue.isEmpty() && attemptNo <= STOP_ATTEMPTS_MAX) {
       LOG.warn("Queue is not empty! Waiting {}ms to consume outstanding records.", STOP_TIMEOUT);

@@ -91,8 +91,9 @@ public class KinesisClientStubShardState {
     if (state.recordsIterator.hasNext()) {
       state.subscriber.onNext(state.recordsIterator.next());
     } else {
-      if (state.shardId.equals("shard-000")) state.subscriber.onComplete();
-      else {
+      if (state.shardId.equals("shard-000")) {
+        state.subscriber.onComplete();
+      } else {
         Throwable throwable = new ExecutionException(new RuntimeException("Oh.."));
         state.subscriber.onError(throwable);
       }
@@ -104,8 +105,9 @@ public class KinesisClientStubShardState {
     if (state.recordsIterator.hasNext()) {
       state.subscriber.onNext(state.recordsIterator.next());
     } else {
-      if (state.shardId.equals("shard-000")) state.subscriber.onComplete();
-      else {
+      if (state.shardId.equals("shard-000")) {
+        state.subscriber.onComplete();
+      } else {
         Throwable throwable = new ReadTimeoutException();
         state.subscriber.onError(throwable);
       }

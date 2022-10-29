@@ -19,11 +19,16 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.Record;
 import org.joda.time.Instant;
+import software.amazon.awssdk.services.kinesis.model.StartingPosition;
 
 public interface ShardEventsConsumerState {
+  String getShardId();
+
   Instant getShardWatermark();
 
-  void updateContinuationSequenceNumber(String continuationSequenceNumber);
-
   void ackRecord(Record record, String continuationSequenceNumber);
+
+  ShardCheckpoint getShardCheckpoint();
+
+  StartingPosition computeNextStartingPosition();
 }

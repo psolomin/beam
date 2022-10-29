@@ -78,7 +78,7 @@ public class ShardsProgressHistory {
   }
 
   static ShardsProgressHistory initSubscribedShardsProgressInfo(
-      Config config, ClientBuilder builder) {
+      Config config, KinesisReaderCheckpoint initialCheckpoint, ClientBuilder builder) {
     ListShardsRequest listShardsRequest =
         ListShardsRequest.builder()
             .streamName(config.getStreamName())

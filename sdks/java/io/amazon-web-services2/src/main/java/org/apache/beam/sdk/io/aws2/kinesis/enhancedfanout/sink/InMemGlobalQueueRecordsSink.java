@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.bytebuddy.utility.nullability.MaybeNull;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import org.slf4j.Logger;
@@ -33,13 +34,20 @@ public class InMemGlobalQueueRecordsSink implements RecordsSink {
   private static final int MAX_CAPACITY = 10_000;
   private static final long QUEUE_OFFER_TIMEOUT_MS = 10_000;
   private static final long QUEUE_POLL_TIMEOUT_MS = 1_000;
+  private static final long QUEUE_EMPTY_TIMEOUT_MS = 60_000;
   private final BlockingQueue<Record> queue = new LinkedBlockingQueue<>(MAX_CAPACITY);
+  private final AtomicBoolean waitUntilEmpty = new AtomicBoolean(false);
 
   @Override
   public void submit(
       String shardId, Optional<KinesisClientRecord> record, String continuationSequenceNumber) {
     try {
       Record r = new Record(shardId, record, continuationSequenceNumber);
+      while (waitUntilEmpty.get()) {
+        synchronized (waitUntilEmpty) {
+          waitUntilEmpty.wait(QUEUE_OFFER_TIMEOUT_MS);
+        }
+      }
       if (!queue.offer(r, QUEUE_OFFER_TIMEOUT_MS, TimeUnit.MILLISECONDS))
         throw new RuntimeException(
             String.format(
@@ -67,10 +75,35 @@ public class InMemGlobalQueueRecordsSink implements RecordsSink {
   @MaybeNull
   public Record fetch() {
     try {
+      synchronized (waitUntilEmpty) {
+        if (queue.isEmpty()) {
+          waitUntilEmpty.notifyAll();
+        }
+      }
+
       return queue.poll(QUEUE_POLL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     } catch (InterruptedException e) {
       LOG.warn("Interrupted while fetching record");
       return null;
+    }
+  }
+
+  @Override
+  public boolean waitUntilEmpty(String shardId) {
+    LOG.info("Shard {} consumer is waiting for the buffer to become empty", shardId);
+    try {
+      waitUntilEmpty.set(true);
+      while (!queue.isEmpty()) {
+        LOG.info("Shard {} - pending records: {}", shardId, queue);
+        synchronized (waitUntilEmpty) {
+          waitUntilEmpty.wait(QUEUE_EMPTY_TIMEOUT_MS);
+        }
+      }
+      waitUntilEmpty.set(false);
+      return true;
+    } catch (InterruptedException e) {
+      LOG.warn("Interrupted while waiting for the events to be dispatched");
+      return false;
     }
   }
 }

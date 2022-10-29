@@ -28,7 +28,7 @@ import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 
 /**
- * Checkpoint representing a total progress in a set of shards in single stream. The set of shards
+ * Checkpoint representing total progress in a set of shards in single stream. The set of shards
  * covered by {@link KinesisReaderCheckpoint} may or may not be equal to set of all shards present
  * in the stream. This class is immutable.
  */

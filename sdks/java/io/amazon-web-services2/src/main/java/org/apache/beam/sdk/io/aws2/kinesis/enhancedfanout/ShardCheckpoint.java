@@ -26,8 +26,10 @@ import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AT
 import java.io.Serializable;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
+import org.apache.beam.sdk.io.aws2.kinesis.TimeUtil;
 import org.joda.time.Instant;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
+import software.amazon.awssdk.services.kinesis.model.StartingPosition;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -150,6 +152,20 @@ public class ShardCheckpoint implements Serializable {
       fullSequenceNumber = shardIteratorType.toString();
     }
     return new ExtendedSequenceNumber(fullSequenceNumber, subSequenceNumber);
+  }
+
+  public StartingPosition toStartingPosition() {
+    StartingPosition.Builder builder = StartingPosition.builder().type(shardIteratorType);
+    switch (shardIteratorType) {
+      case AT_TIMESTAMP:
+        return builder.timestamp(TimeUtil.toJava(timestamp)).build();
+      case AT_SEQUENCE_NUMBER:
+      case AFTER_SEQUENCE_NUMBER:
+        return builder.sequenceNumber(continuationSequenceNumber).build();
+
+      default:
+        return builder.build();
+    }
   }
 
   @Override

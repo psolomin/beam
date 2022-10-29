@@ -32,4 +32,6 @@ public interface RecordsSink {
 
   @MaybeNull
   Record fetch();
+
+  boolean waitUntilEmpty(String shardId);
 }
