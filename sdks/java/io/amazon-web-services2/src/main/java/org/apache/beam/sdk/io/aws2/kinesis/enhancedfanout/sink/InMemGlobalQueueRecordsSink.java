@@ -22,7 +22,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import net.bytebuddy.utility.nullability.MaybeNull;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,12 +30,19 @@ import software.amazon.kinesis.retrieval.KinesisClientRecord;
 public class InMemGlobalQueueRecordsSink implements RecordsSink {
   private static final Logger LOG = LoggerFactory.getLogger(InMemGlobalQueueRecordsSink.class);
 
-  private static final int MAX_CAPACITY = 10_000;
-  private static final long QUEUE_OFFER_TIMEOUT_MS = 10_000;
-  private static final long QUEUE_POLL_TIMEOUT_MS = 1_000;
-  private static final long QUEUE_EMPTY_TIMEOUT_MS = 60_000;
-  private final BlockingQueue<Record> queue = new LinkedBlockingQueue<>(MAX_CAPACITY);
+  private final InMemGlobalSinkConfig config;
+  private final BlockingQueue<Record> queue;
   private final AtomicBoolean waitUntilEmpty = new AtomicBoolean(false);
+
+  public InMemGlobalQueueRecordsSink(InMemGlobalSinkConfig config) {
+    this.config = config;
+    this.queue = new LinkedBlockingQueue<>(config.getMaxCapacity());
+  }
+
+  public InMemGlobalQueueRecordsSink() {
+    this.config = InMemGlobalSinkConfig.defaultConfig();
+    this.queue = new LinkedBlockingQueue<>(config.getMaxCapacity());
+  }
 
   @Override
   public void submit(
@@ -45,14 +51,14 @@ public class InMemGlobalQueueRecordsSink implements RecordsSink {
       Record r = new Record(shardId, record, continuationSequenceNumber);
       while (waitUntilEmpty.get()) {
         synchronized (waitUntilEmpty) {
-          waitUntilEmpty.wait(QUEUE_OFFER_TIMEOUT_MS);
+          waitUntilEmpty.wait(config.getQueueOfferTimeoutMs());
         }
       }
-      if (!queue.offer(r, QUEUE_OFFER_TIMEOUT_MS, TimeUnit.MILLISECONDS))
+      if (!queue.offer(r, config.getQueueOfferTimeoutMs(), TimeUnit.MILLISECONDS))
         throw new RuntimeException(
             String.format(
                 "Queue overloaded, " + "failed to push event from shard %s after %s ms",
-                shardId, QUEUE_OFFER_TIMEOUT_MS));
+                shardId, config.getQueueOfferTimeoutMs()));
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       LOG.warn("Interrupted while submitting record {} from shard {}", record, shardId);
@@ -72,8 +78,7 @@ public class InMemGlobalQueueRecordsSink implements RecordsSink {
   }
 
   @Override
-  @MaybeNull
-  public Record fetch() {
+  public Optional<Record> fetch() {
     try {
       synchronized (waitUntilEmpty) {
         if (queue.isEmpty()) {
@@ -81,10 +86,12 @@ public class InMemGlobalQueueRecordsSink implements RecordsSink {
         }
       }
 
-      return queue.poll(QUEUE_POLL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+      Record recordOrNull = queue.poll(config.getQueuePollTimeoutMs(), TimeUnit.MILLISECONDS);
+      if (recordOrNull != null) return Optional.of(recordOrNull);
+      else return Optional.absent();
     } catch (InterruptedException e) {
       LOG.warn("Interrupted while fetching record");
-      return null;
+      return Optional.absent();
     }
   }
 
@@ -96,7 +103,7 @@ public class InMemGlobalQueueRecordsSink implements RecordsSink {
       while (!queue.isEmpty()) {
         LOG.info("Shard {} - pending records: {}", shardId, queue);
         synchronized (waitUntilEmpty) {
-          waitUntilEmpty.wait(QUEUE_EMPTY_TIMEOUT_MS);
+          waitUntilEmpty.wait(config.getQueueEmptyTimeoutMs());
         }
       }
       waitUntilEmpty.set(false);

@@ -45,6 +45,7 @@ import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals.ShardSubscribe
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.Record;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.RecordsSink;
 import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableMap;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
@@ -341,9 +342,10 @@ public class StreamConsumer implements Runnable {
   }
 
   public CustomOptional<KinesisRecord> nextRecord() {
-    Record record = recordsSink.fetch();
-    if (record == null) return CustomOptional.absent();
+    Optional<Record> maybeRecord = recordsSink.fetch();
+    if (!maybeRecord.isPresent()) return CustomOptional.absent();
 
+    Record record = maybeRecord.get();
     consumers.get(record.getShardId()).ackRecord(record);
     if (record.getKinesisClientRecord().isPresent()) {
       KinesisRecord kinesisRecord =
