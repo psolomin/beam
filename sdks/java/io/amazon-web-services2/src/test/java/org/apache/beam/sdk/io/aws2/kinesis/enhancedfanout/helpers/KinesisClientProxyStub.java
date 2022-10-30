@@ -17,11 +17,10 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.RecordsGenerators.createRecord;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -36,10 +35,8 @@ import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.KinesisAsyncClientProx
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
-import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
-import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.SequenceNumberRange;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
@@ -189,14 +186,5 @@ class KinesisClientProxyStub implements KinesisAsyncClientProxy {
                         .build());
 
     return Stream.concat(recordsWithData, recordsWithOutData).collect(Collectors.toList());
-  }
-
-  private static Record createRecord(AtomicInteger sequenceNumber) {
-    return Record.builder()
-        .partitionKey("foo")
-        .approximateArrivalTimestamp(Instant.now())
-        .sequenceNumber(String.valueOf(sequenceNumber.incrementAndGet()))
-        .data(SdkBytes.fromByteArray(sequenceNumber.toString().getBytes(UTF_8)))
-        .build();
   }
 }

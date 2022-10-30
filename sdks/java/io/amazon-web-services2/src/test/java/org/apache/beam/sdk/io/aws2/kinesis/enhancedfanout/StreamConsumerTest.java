@@ -17,15 +17,14 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
+import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.RecordsGenerators.waitForRecords;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.KinesisClientBuilderStub;
@@ -216,25 +215,5 @@ public class StreamConsumerTest {
                 .sequenceNumber(seqNumber)
                 .build())
         .build();
-  }
-
-  private static List<KinesisRecord> waitForRecords(
-      StreamConsumer consumer, int expectedRecordsCnt, int maxAttempts) {
-    int attemptNo = 0;
-    List<KinesisRecord> records = new ArrayList<>();
-
-    while (attemptNo < maxAttempts) {
-      attemptNo++;
-      CustomOptional<KinesisRecord> maybeRecord = consumer.nextRecord();
-      if (maybeRecord.isPresent()) records.add(maybeRecord.get());
-    }
-
-    assertEquals(expectedRecordsCnt, records.size());
-    return records;
-  }
-
-  private static List<KinesisRecord> waitForRecords(
-      StreamConsumer consumer, int expectedRecordsCnt) {
-    return waitForRecords(consumer, expectedRecordsCnt, expectedRecordsCnt * 3);
   }
 }
