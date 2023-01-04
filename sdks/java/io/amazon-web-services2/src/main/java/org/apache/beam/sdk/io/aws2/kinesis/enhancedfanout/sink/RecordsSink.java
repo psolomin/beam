@@ -25,11 +25,10 @@ public interface RecordsSink {
   void submit(
       String shardId, Optional<KinesisClientRecord> record, String continuationSequenceNumber);
 
-  void submit(String shardId, List<KinesisClientRecord> records, String continuationSequenceNumber);
+  void submitMany(
+      String shardId, List<KinesisClientRecord> records, String continuationSequenceNumber);
 
   long getTotalCnt();
 
   Optional<Record> fetch();
-
-  boolean waitUntilEmpty(String shardId);
 }
