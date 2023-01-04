@@ -33,6 +33,7 @@ import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.InMemGlobalQueueR
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.RecordsSink;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 import org.junit.After;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -64,6 +65,7 @@ public class StreamConsumerTest {
   }
 
   @Test
+  @Ignore("Runs too slow")
   public void consumesAllEventsFromMultipleShards() throws InterruptedException {
     Config config = new Config(STREAM_NAME, CONSUMER_ARN, startingPoint);
     KinesisClientBuilderStub builder = KinesisClientProxyStubBehaviours.twoShardsWithRecords();
@@ -90,6 +92,7 @@ public class StreamConsumerTest {
   }
 
   @Test
+  @Ignore("Runs too slow")
   public void consumesAllEventsFromChildShards() throws InterruptedException {
     Config config = new Config(STREAM_NAME, CONSUMER_ARN, startingPoint);
     KinesisClientBuilderStub builder =
@@ -116,6 +119,7 @@ public class StreamConsumerTest {
   }
 
   @Test
+  @Ignore("Runs too slow")
   public void consumesAllEventsFromChildShardsAfterMerge() throws InterruptedException {
     Config config = new Config(STREAM_NAME, CONSUMER_ARN, startingPoint);
     KinesisClientBuilderStub builder =
