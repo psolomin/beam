@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,7 +31,6 @@ public class InMemGlobalQueueRecordsSink implements RecordsSink {
 
   private final InMemGlobalSinkConfig config;
   private final BlockingQueue<Record> queue;
-  private final AtomicBoolean waitUntilEmpty = new AtomicBoolean(false);
 
   public InMemGlobalQueueRecordsSink(InMemGlobalSinkConfig config) {
     this.config = config;
@@ -49,11 +47,6 @@ public class InMemGlobalQueueRecordsSink implements RecordsSink {
       String shardId, Optional<KinesisClientRecord> record, String continuationSequenceNumber) {
     try {
       Record r = new Record(shardId, record, continuationSequenceNumber);
-      while (waitUntilEmpty.get()) {
-        synchronized (waitUntilEmpty) {
-          waitUntilEmpty.wait(config.getQueueOfferTimeoutMs());
-        }
-      }
       if (!queue.offer(r, config.getQueueOfferTimeoutMs(), TimeUnit.MILLISECONDS))
         throw new RuntimeException(
             String.format(
@@ -66,7 +59,7 @@ public class InMemGlobalQueueRecordsSink implements RecordsSink {
   }
 
   @Override
-  public void submit(
+  public void submitMany(
       String shardId, List<KinesisClientRecord> records, String continuationSequenceNumber) {
     if (records.isEmpty()) submit(shardId, Optional.absent(), continuationSequenceNumber);
     else records.forEach(r -> submit(shardId, Optional.of(r), continuationSequenceNumber));
@@ -80,37 +73,12 @@ public class InMemGlobalQueueRecordsSink implements RecordsSink {
   @Override
   public Optional<Record> fetch() {
     try {
-      synchronized (waitUntilEmpty) {
-        if (queue.isEmpty()) {
-          waitUntilEmpty.notifyAll();
-        }
-      }
-
       Record recordOrNull = queue.poll(config.getQueuePollTimeoutMs(), TimeUnit.MILLISECONDS);
       if (recordOrNull != null) return Optional.of(recordOrNull);
       else return Optional.absent();
     } catch (InterruptedException e) {
       LOG.warn("Interrupted while fetching record");
       return Optional.absent();
-    }
-  }
-
-  @Override
-  public boolean waitUntilEmpty(String shardId) {
-    LOG.info("Shard {} consumer is waiting for the buffer to become empty", shardId);
-    try {
-      waitUntilEmpty.set(true);
-      while (!queue.isEmpty()) {
-        LOG.info("Shard {} - pending records: {}", shardId, queue);
-        synchronized (waitUntilEmpty) {
-          waitUntilEmpty.wait(config.getQueueEmptyTimeoutMs());
-        }
-      }
-      waitUntilEmpty.set(false);
-      return true;
-    } catch (InterruptedException e) {
-      LOG.warn("Interrupted while waiting for the events to be dispatched");
-      return false;
     }
   }
 }

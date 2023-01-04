@@ -18,6 +18,11 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink;
 
 public class InMemGlobalSinkConfig {
+  private static final int DEFAULT_MAX_CAPACITY = 10_000;
+  private static final long DEFAULT_QUEUE_OFFER_TIMEOUT_MS = 10_000;
+  private static final long DEFAULT_QUEUE_POLL_TIMEOUT_MS = 1_000;
+  private static final long DEFAULT_QUEUE_EMPTY_TIMEOUT_MS = 60_000;
+
   private final int maxCapacity;
   private final long queueOfferTimeoutMs;
   private final long queuePollTimeoutMs;
@@ -35,7 +40,11 @@ public class InMemGlobalSinkConfig {
   }
 
   public static InMemGlobalSinkConfig defaultConfig() {
-    return new InMemGlobalSinkConfig(10_000, 10_000, 1_000, 60_000);
+    return new InMemGlobalSinkConfig(
+        DEFAULT_MAX_CAPACITY,
+        DEFAULT_QUEUE_OFFER_TIMEOUT_MS,
+        DEFAULT_QUEUE_POLL_TIMEOUT_MS,
+        DEFAULT_QUEUE_EMPTY_TIMEOUT_MS);
   }
 
   public int getMaxCapacity() {

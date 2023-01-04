@@ -76,8 +76,7 @@ class ShardEventsConsumer implements Runnable {
         StartingPosition startingPosition = state.computeNextStartingPosition();
         LOG.info("Shard {} - Starting subscription with position = {}", shardId, startingPosition);
         boolean reSubscribe = shardSubscriber.subscribe(startingPosition, this::consume);
-        boolean bufferIsEmpty = recordsSink.waitUntilEmpty(shardId);
-        if (reSubscribe && bufferIsEmpty) {
+        if (reSubscribe) {
           LOG.info("Will re-subscribe");
         } else {
           isRunning.set(false);
@@ -99,7 +98,7 @@ class ShardEventsConsumer implements Runnable {
                       .map(KinesisClientRecord::fromRecord)
                       .collect(Collectors.toList()));
     } else clientRecords = Collections.emptyList();
-    recordsSink.submit(shardId, clientRecords, event.continuationSequenceNumber());
+    recordsSink.submitMany(shardId, clientRecords, event.continuationSequenceNumber());
   }
 
   void ackRecord(Record record) {
