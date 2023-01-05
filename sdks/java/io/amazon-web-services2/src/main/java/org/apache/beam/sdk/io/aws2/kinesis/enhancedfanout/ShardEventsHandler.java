@@ -20,6 +20,8 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+
+import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
@@ -40,7 +42,7 @@ class ShardEventsHandler implements Subscriber<SubscribeToShardEventStream> {
   private final String consumerArn;
   private final String shardId;
 
-  private Subscription s;
+  private CustomOptional<Subscription> s = CustomOptional.absent();
   private volatile boolean cancelled = false;
 
   ShardEventsHandler(
@@ -75,7 +77,7 @@ class ShardEventsHandler implements Subscriber<SubscribeToShardEventStream> {
 
   @Override
   public void onSubscribe(Subscription subscription) {
-    s = subscription;
+    s = CustomOptional.of(subscription);
     eventsHandlerReadyLatch.countDown();
   }
 
@@ -111,7 +113,7 @@ class ShardEventsHandler implements Subscriber<SubscribeToShardEventStream> {
 
   void requestRecord() {
     if (!cancelled) {
-      s.request(1);
+      s.get().request(1);
     }
   }
 
@@ -122,7 +124,7 @@ class ShardEventsHandler implements Subscriber<SubscribeToShardEventStream> {
     cancelled = true;
 
     if (s != null) {
-      s.cancel();
+      s.get().cancel();
     }
   }
 

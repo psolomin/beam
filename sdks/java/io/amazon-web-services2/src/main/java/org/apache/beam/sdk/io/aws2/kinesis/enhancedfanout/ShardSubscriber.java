@@ -27,6 +27,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+
+import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.errors.ConsumerError;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.errors.RecoverableConsumerError;
 import org.slf4j.Logger;
@@ -50,7 +52,7 @@ class ShardSubscriber {
   private final String consumerArn;
   private final String shardId;
   private final AtomicBoolean isActive;
-  private ShardEventsHandler shardEventsHandler;
+  private CustomOptional<ShardEventsHandler> shardEventsHandler = CustomOptional.absent();
 
   ShardSubscriber(
       StreamConsumer pool,
@@ -70,9 +72,9 @@ class ShardSubscriber {
       StartingPosition startingPosition, Consumer<SubscribeToShardEvent> eventConsumer)
       throws InterruptedException {
     LOG.info("Creating subscription");
-    shardEventsHandler = doSubscribe(startingPosition);
+    shardEventsHandler = CustomOptional.of(doSubscribe(startingPosition));
     isActive.set(true);
-    return startConsumeLoop(eventConsumer, shardEventsHandler);
+    return startConsumeLoop(eventConsumer, shardEventsHandler.get());
   }
 
   private ShardEventsHandler doSubscribe(StartingPosition startingPosition)
@@ -185,7 +187,9 @@ class ShardSubscriber {
   private boolean maybeRecoverableError(ShardEvent event) {
     Throwable error = event.getError();
     Throwable cause;
-    if (error instanceof CompletionException || error instanceof ExecutionException) {
+    if (
+            (error instanceof CompletionException || error instanceof ExecutionException)
+                    && error.getCause() != null) {
       cause = ConsumerError.toConsumerError(error.getCause());
     } else {
       cause = ConsumerError.toConsumerError(error);
@@ -206,7 +210,7 @@ class ShardSubscriber {
   }
 
   void cancel() {
-    if (isActive.get()) shardEventsHandler.cancel();
+    if (isActive.get()) shardEventsHandler.get().cancel();
 
     int attemptNo = 1;
     while (!queue.isEmpty() && attemptNo <= STOP_ATTEMPTS_MAX) {

@@ -19,8 +19,12 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import java.time.Instant;
 import java.util.Optional;
+
+import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import software.amazon.kinesis.common.InitialPositionInStream;
+
+import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.Checkers.checkNotNull;
 
 public class Config {
   private final String streamName;
@@ -45,6 +49,14 @@ public class Config {
 
   public Config(String streamName, String consumerArn, StartingPoint startingPoint) {
     this(streamName, consumerArn, startingPoint, Optional.empty());
+  }
+
+  public static Config fromIOSpec(KinesisIO.Read spec) {
+    return new Config(
+            checkNotNull(spec.getStreamName(), "streamName is null"),
+            checkNotNull(spec.getConsumerArn(), "consumer ARN is null"),
+            checkNotNull(spec.getInitialPosition(), "initial position is null")
+    );
   }
 
   public String getStreamName() {

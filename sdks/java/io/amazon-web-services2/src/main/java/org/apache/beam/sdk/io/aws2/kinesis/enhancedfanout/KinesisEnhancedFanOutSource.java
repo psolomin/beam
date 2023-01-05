@@ -17,8 +17,6 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
-
 import com.google.common.collect.ImmutableList;
 import java.io.IOException;
 import java.util.List;
@@ -33,6 +31,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.Checkers.checkNotNull;
+
 @SuppressWarnings("UnusedVariable")
 public class KinesisEnhancedFanOutSource
     extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoint> {
@@ -46,12 +46,15 @@ public class KinesisEnhancedFanOutSource
     this(
         read,
         new DynamicCheckpointGenerator(
-            read.getStreamName(), read.getConsumerArn(), read.getInitialPosition()));
+                checkNotNull(read.getStreamName(), "streamName"),
+                checkNotNull(read.getConsumerArn(), "consumerArn"),
+                checkNotNull(read.getInitialPosition(), "initialPosition"))
+    );
   }
 
   private KinesisEnhancedFanOutSource(KinesisIO.Read spec, CheckpointGenerator initialCheckpoint) {
-    this.spec = checkNotNull(spec);
-    this.checkpointGenerator = checkNotNull(initialCheckpoint);
+    this.spec = checkNotNull(spec, "spec");
+    this.checkpointGenerator = checkNotNull(initialCheckpoint, "initialCheckpoint");
   }
 
   @Override
