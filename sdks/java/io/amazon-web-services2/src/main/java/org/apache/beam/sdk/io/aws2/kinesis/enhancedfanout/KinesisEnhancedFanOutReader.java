@@ -28,12 +28,10 @@ import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.InMemGlobalQueueRecordsSink;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.RecordsSink;
-import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@SuppressWarnings("UnusedVariable")
 public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader<KinesisRecord> {
 
   private static final Logger LOG = LoggerFactory.getLogger(KinesisEnhancedFanOutReader.class);
@@ -42,7 +40,6 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
   private final ClientBuilder clientBuilder;
   private final KinesisEnhancedFanOutSource source;
   private final CheckpointGenerator checkpointGenerator;
-  private final Duration backlogBytesCheckThreshold;
 
   private CustomOptional<KinesisRecord> currentRecord = CustomOptional.absent();
   private CustomOptional<StreamConsumer> streamConsumer = CustomOptional.absent();
@@ -50,22 +47,13 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
   KinesisEnhancedFanOutReader(
       KinesisIO.Read spec,
       ClientBuilder clientBuilder,
-      CheckpointGenerator initialCheckpointGenerator,
-      KinesisEnhancedFanOutSource source) {
-    this(spec, clientBuilder, initialCheckpointGenerator, source, Duration.standardSeconds(30));
-  }
-
-  KinesisEnhancedFanOutReader(
-      KinesisIO.Read spec,
-      ClientBuilder clientBuilder,
       CheckpointGenerator checkpointGenerator,
-      KinesisEnhancedFanOutSource source,
-      Duration backlogBytesCheckThreshold) {
+      KinesisEnhancedFanOutSource source
+  ) {
     this.spec = checkNotNull(spec, "spec");
     this.clientBuilder = checkNotNull(clientBuilder, "clientBuilder");
     this.checkpointGenerator = checkNotNull(checkpointGenerator, "checkpointGenerator");
     this.source = source;
-    this.backlogBytesCheckThreshold = backlogBytesCheckThreshold;
   }
 
   @Override

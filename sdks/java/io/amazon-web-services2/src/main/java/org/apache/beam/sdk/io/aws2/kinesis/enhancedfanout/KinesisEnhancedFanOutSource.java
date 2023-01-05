@@ -28,16 +28,11 @@ import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecordCoder;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.checkerframework.checker.nullness.qual.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.Checkers.checkNotNull;
 
-@SuppressWarnings("UnusedVariable")
 public class KinesisEnhancedFanOutSource
     extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoint> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(KinesisEnhancedFanOutSource.class);
 
   private final KinesisIO.Read spec;
   private final CheckpointGenerator checkpointGenerator;
