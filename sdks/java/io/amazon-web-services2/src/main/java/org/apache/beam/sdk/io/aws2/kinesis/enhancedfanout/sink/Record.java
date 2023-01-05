@@ -19,6 +19,7 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink;
 
 import java.util.Objects;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 public class Record {
@@ -48,7 +49,7 @@ public class Record {
   }
 
   @Override
-  public boolean equals(Object o) {
+  public boolean equals(@Nullable Object o) {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
     Record record = (Record) o;

@@ -45,7 +45,7 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
   private final Duration backlogBytesCheckThreshold;
 
   private CustomOptional<KinesisRecord> currentRecord = CustomOptional.absent();
-  private StreamConsumer streamConsumer;
+  private CustomOptional<StreamConsumer> streamConsumer = CustomOptional.absent();
 
   KinesisEnhancedFanOutReader(
       KinesisIO.Read spec,
@@ -71,20 +71,18 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
   @Override
   public boolean start() throws IOException {
     LOG.info("Starting reader using {}", checkpointGenerator);
-
-    Config config =
-        new Config(spec.getStreamName(), spec.getConsumerArn(), spec.getInitialPosition());
+    Config config = Config.fromIOSpec(spec);
     RecordsSink sink = new InMemGlobalQueueRecordsSink();
     List<ShardCheckpoint> checkpoints =
         ShardsListingUtils.initSubscribedShardsProgressInfo(config, clientBuilder);
     KinesisReaderCheckpoint initialCheckpoint = new KinesisReaderCheckpoint(checkpoints);
-    streamConsumer = StreamConsumer.init(config, clientBuilder, initialCheckpoint, sink);
-    return streamConsumer.isRunning();
+    streamConsumer = CustomOptional.of(StreamConsumer.init(config, clientBuilder, initialCheckpoint, sink));
+    return streamConsumer.get().isRunning();
   }
 
   @Override
   public boolean advance() throws IOException {
-    currentRecord = streamConsumer.nextRecord();
+    currentRecord = streamConsumer.get().nextRecord();
     return currentRecord.isPresent();
   }
 
@@ -106,8 +104,8 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
   @Override
   public void close() throws IOException {
     try {
-      streamConsumer.initiateGracefulShutdown();
-      streamConsumer.awaitTermination();
+      streamConsumer.get().initiateGracefulShutdown();
+      streamConsumer.get().awaitTermination();
     } catch (RuntimeException e) {
       throw e;
     } catch (Exception e) {
@@ -117,12 +115,12 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
 
   @Override
   public Instant getWatermark() {
-    return streamConsumer.getWatermark();
+    return streamConsumer.get().getWatermark();
   }
 
   @Override
   public UnboundedSource.CheckpointMark getCheckpointMark() {
-    return streamConsumer.getCheckpointMark();
+    return streamConsumer.get().getCheckpointMark();
   }
 
   @Override

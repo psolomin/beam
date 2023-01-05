@@ -150,7 +150,7 @@ public class StreamConsumer implements Runnable {
     consumers.forEach((k, v) -> v.initiateGracefulShutdown());
   }
 
-  private ExecutorService createThreadPool(Config config) {
+  private static ExecutorService createThreadPool(Config config) {
     return Executors.newCachedThreadPool(
         new ThreadFactory() {
           private final AtomicLong threadCount = new AtomicLong(0);
@@ -249,7 +249,7 @@ public class StreamConsumer implements Runnable {
             shardId,
             ShardIteratorType.AFTER_SEQUENCE_NUMBER,
             continuationSequenceNumber,
-            null);
+            0L);
 
     WatermarkPolicy watermarkPolicy =
         WatermarkPolicyFactory.withArrivalTimePolicy().createWatermarkPolicy();
@@ -285,7 +285,10 @@ public class StreamConsumer implements Runnable {
     List<Shard> newShards = waitForNewShards(receivedFromShardId, childShards);
 
     LOG.info("Stopping {} upon signal {}", receivedFromShardId, reShardSignal);
-    consumers.get(receivedFromShardId).initiateGracefulShutdown();
+    if (consumers.containsKey(receivedFromShardId))
+      consumers.get(receivedFromShardId).initiateGracefulShutdown();
+    else
+      LOG.warn("Consumer {} not found in consumers collection", receivedFromShardId);
 
     newShards.forEach(
         newShard -> {
@@ -346,7 +349,10 @@ public class StreamConsumer implements Runnable {
     if (!maybeRecord.isPresent()) return CustomOptional.absent();
 
     Record record = maybeRecord.get();
-    consumers.get(record.getShardId()).ackRecord(record);
+
+    if (consumers.containsKey(record.getShardId()))
+      consumers.get(record.getShardId()).ackRecord(record);
+
     if (record.getKinesisClientRecord().isPresent()) {
       KinesisRecord kinesisRecord =
           new KinesisRecord(
