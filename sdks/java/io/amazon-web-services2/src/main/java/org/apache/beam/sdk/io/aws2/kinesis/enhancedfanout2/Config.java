@@ -15,9 +15,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
+package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
-import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.Checkers.checkNotNull;
+import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.Checkers.checkNotNull;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -25,7 +25,7 @@ import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import software.amazon.kinesis.common.InitialPositionInStream;
 
-public class Config {
+class Config {
   private final String streamName;
   private final String consumerArn;
   private final StartingPoint startingPoint;

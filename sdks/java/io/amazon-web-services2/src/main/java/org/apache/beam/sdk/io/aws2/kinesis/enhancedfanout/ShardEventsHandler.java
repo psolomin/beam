@@ -20,7 +20,6 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;

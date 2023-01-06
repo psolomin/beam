@@ -17,19 +17,13 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
-import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
-import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
-import org.joda.time.Instant;
+import java.io.Serializable;
+import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
 
-interface ShardSubscribersPool {
-  boolean start();
-
-  boolean stop();
-
-  CustomOptional<KinesisRecord> nextRecord();
-
-  // Beam-specific methods
-  Instant getWatermark();
-
-  KinesisReaderCheckpoint getCheckpointMark();
+/**
+ * Used to generate checkpoint object on demand. How exactly the checkpoint is generated is up to
+ * implementing class.
+ */
+interface CheckpointGenerator extends Serializable {
+  KinesisReaderCheckpoint generate(ClientBuilder clientBuilder) throws TransientKinesisException;
 }

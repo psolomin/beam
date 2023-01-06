@@ -287,8 +287,7 @@ public class StreamConsumer implements Runnable {
     LOG.info("Stopping {} upon signal {}", receivedFromShardId, reShardSignal);
     if (consumers.containsKey(receivedFromShardId))
       consumers.get(receivedFromShardId).initiateGracefulShutdown();
-    else
-      LOG.warn("Consumer {} not found in consumers collection", receivedFromShardId);
+    else LOG.warn("Consumer {} not found in consumers collection", receivedFromShardId);
 
     newShards.forEach(
         newShard -> {

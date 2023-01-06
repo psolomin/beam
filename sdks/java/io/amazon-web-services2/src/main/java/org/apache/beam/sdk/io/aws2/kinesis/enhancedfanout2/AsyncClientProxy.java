@@ -17,19 +17,15 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
-import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
-import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
-import org.joda.time.Instant;
+import java.util.concurrent.CompletableFuture;
+import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
+import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 
-interface ShardSubscribersPool {
-  boolean start();
+public interface AsyncClientProxy extends AutoCloseable {
+  CompletableFuture<ListShardsResponse> listShards(ListShardsRequest listShardsRequest);
 
-  boolean stop();
-
-  CustomOptional<KinesisRecord> nextRecord();
-
-  // Beam-specific methods
-  Instant getWatermark();
-
-  KinesisReaderCheckpoint getCheckpointMark();
+  CompletableFuture<Void> subscribeToShard(
+      SubscribeToShardRequest request, SubscribeToShardResponseHandler responseHandler);
 }
