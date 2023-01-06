@@ -30,12 +30,12 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
 
   @Override
   public boolean start() {
-    return false;
+    return true;
   }
 
   @Override
   public boolean stop() {
-    return false;
+    return true;
   }
 
   @Override
