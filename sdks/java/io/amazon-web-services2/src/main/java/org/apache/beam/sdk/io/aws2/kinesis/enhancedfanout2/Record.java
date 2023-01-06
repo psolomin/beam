@@ -17,11 +17,10 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
+import java.util.Objects;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import org.checkerframework.checker.nullness.qual.Nullable;
-
-import java.util.Objects;
 
 class Record {
   private final String shardId;
@@ -33,8 +32,7 @@ class Record {
       String shardId,
       Optional<KinesisRecord> kinesisClientRecord,
       String continuationSequenceNumber,
-      long subSequenceNumber
-      ) {
+      long subSequenceNumber) {
     this.shardId = shardId;
     this.kinesisRecord = kinesisClientRecord;
     this.continuationSequenceNumber = continuationSequenceNumber;
@@ -42,21 +40,15 @@ class Record {
   }
 
   static Record checkPointOnly(String shardId, String continuationSequenceNumber) {
-    return new Record(
-            shardId,
-            Optional.absent(),
-            continuationSequenceNumber,
-            0L
-    );
+    return new Record(shardId, Optional.absent(), continuationSequenceNumber, 0L);
   }
 
   static Record record(String shardId, KinesisRecord kinesisRecord) {
     return new Record(
-            shardId,
-            Optional.of(kinesisRecord),
-            kinesisRecord.getSequenceNumber(),
-            kinesisRecord.getSubSequenceNumber()
-    );
+        shardId,
+        Optional.of(kinesisRecord),
+        kinesisRecord.getSequenceNumber(),
+        kinesisRecord.getSubSequenceNumber());
   }
 
   String getShardId() {

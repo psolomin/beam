@@ -17,19 +17,25 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
-import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
-import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
-import org.joda.time.Instant;
+import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
-interface ShardSubscribersPool {
-  boolean start();
+/** Always returns the same instance of checkpoint. */
+class StaticCheckpointGenerator implements CheckpointGenerator {
 
-  boolean stop();
+  private final KinesisReaderCheckpoint checkpoint;
 
-  CustomOptional<KinesisRecord> nextRecord();
+  public StaticCheckpointGenerator(KinesisReaderCheckpoint checkpoint) {
+    checkNotNull(checkpoint, "checkpoint");
+    this.checkpoint = checkpoint;
+  }
 
-  // Beam-specific methods
-  Instant getWatermark();
+  @Override
+  public KinesisReaderCheckpoint generate(ClientBuilder clientBuilder) {
+    return checkpoint;
+  }
 
-  KinesisReaderCheckpoint getCheckpointMark();
+  @Override
+  public String toString() {
+    return checkpoint.toString();
+  }
 }

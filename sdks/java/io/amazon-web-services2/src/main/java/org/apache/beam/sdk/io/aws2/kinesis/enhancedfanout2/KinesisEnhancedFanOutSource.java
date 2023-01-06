@@ -15,9 +15,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
+package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
-import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.Checkers.checkNotNull;
+import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.Checkers.checkNotNull;
 
 import com.google.common.collect.ImmutableList;
 import java.io.IOException;

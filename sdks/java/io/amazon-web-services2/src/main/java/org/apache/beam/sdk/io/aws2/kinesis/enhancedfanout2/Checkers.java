@@ -17,19 +17,15 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
-import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
-import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
-import org.joda.time.Instant;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
-interface ShardSubscribersPool {
-  boolean start();
-
-  boolean stop();
-
-  CustomOptional<KinesisRecord> nextRecord();
-
-  // Beam-specific methods
-  Instant getWatermark();
-
-  KinesisReaderCheckpoint getCheckpointMark();
+// TODO: this should be replaced with more standard checkers
+class Checkers {
+  static <T> T checkNotNull(@Nullable T reference, String objName) {
+    if (reference == null) {
+      throw new RuntimeException(objName + " is null");
+    } else {
+      return reference;
+    }
+  }
 }

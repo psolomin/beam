@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
+package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
@@ -26,8 +26,6 @@ import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
-import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.InMemGlobalQueueRecordsSink;
-import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.sink.RecordsSink;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,7 +40,7 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
   private final CheckpointGenerator checkpointGenerator;
 
   private CustomOptional<KinesisRecord> currentRecord = CustomOptional.absent();
-  private CustomOptional<StreamConsumer> streamConsumer = CustomOptional.absent();
+  private CustomOptional<ShardSubscribersPool> shardSubscribersPool = CustomOptional.absent();
 
   KinesisEnhancedFanOutReader(
       KinesisIO.Read spec,
@@ -59,18 +57,20 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
   public boolean start() throws IOException {
     LOG.info("Starting reader using {}", checkpointGenerator);
     Config config = Config.fromIOSpec(spec);
-    RecordsSink sink = new InMemGlobalQueueRecordsSink();
     List<ShardCheckpoint> checkpoints =
         ShardsListingUtils.initSubscribedShardsProgressInfo(config, clientBuilder);
     KinesisReaderCheckpoint initialCheckpoint = new KinesisReaderCheckpoint(checkpoints);
-    streamConsumer =
-        CustomOptional.of(StreamConsumer.init(config, clientBuilder, initialCheckpoint, sink));
-    return streamConsumer.get().isRunning();
+    RecordsBufferState recordsBufferState = new RecordsBufferStateImpl(initialCheckpoint);
+    RecordsBuffer recordsBuffer = new RecordsBufferImpl(recordsBufferState);
+    ShardSubscribersPool pool = new ShardSubscribersPoolImpl(recordsBuffer);
+    boolean isRunning = pool.start();
+    shardSubscribersPool = CustomOptional.of(pool);
+    return isRunning;
   }
 
   @Override
   public boolean advance() throws IOException {
-    currentRecord = streamConsumer.get().nextRecord();
+    currentRecord = shardSubscribersPool.get().nextRecord();
     return currentRecord.isPresent();
   }
 
@@ -92,8 +92,8 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
   @Override
   public void close() throws IOException {
     try {
-      streamConsumer.get().initiateGracefulShutdown();
-      streamConsumer.get().awaitTermination();
+      boolean isStoppedCleanly = shardSubscribersPool.get().stop();
+      if (!isStoppedCleanly) LOG.warn("Pool was not stopped correctly");
     } catch (RuntimeException e) {
       throw e;
     } catch (Exception e) {
@@ -103,12 +103,12 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
 
   @Override
   public Instant getWatermark() {
-    return streamConsumer.get().getWatermark();
+    return shardSubscribersPool.get().getWatermark();
   }
 
   @Override
   public UnboundedSource.CheckpointMark getCheckpointMark() {
-    return streamConsumer.get().getCheckpointMark();
+    return shardSubscribersPool.get().getCheckpointMark();
   }
 
   @Override

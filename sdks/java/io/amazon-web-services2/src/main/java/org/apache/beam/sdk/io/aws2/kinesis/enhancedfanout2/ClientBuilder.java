@@ -17,19 +17,6 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
-import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
-import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
-import org.joda.time.Instant;
-
-interface ShardSubscribersPool {
-  boolean start();
-
-  boolean stop();
-
-  CustomOptional<KinesisRecord> nextRecord();
-
-  // Beam-specific methods
-  Instant getWatermark();
-
-  KinesisReaderCheckpoint getCheckpointMark();
+public interface ClientBuilder {
+  AsyncClientProxy build();
 }
