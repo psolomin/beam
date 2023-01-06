@@ -124,10 +124,11 @@ public class ShardCheckpoint implements Serializable {
           "Sequence number must be empty for LATEST, TRIM_HORIZON or AT_TIMESTAMP");
     }
     if (shardIteratorType == AT_TIMESTAMP) {
-      checkNotNull(timestamp, "You must provide timestamp for AT_TIMESTAMP");
+      checkArgument(
+              !timestamp.isPresent(), "You must provide timestamp for AT_TIMESTAMP");
     } else {
       checkArgument(
-          timestamp == null, "Timestamp must be null for an iterator type other than AT_TIMESTAMP");
+              timestamp.isPresent(), "Timestamp must be empty for an iterator type other than AT_TIMESTAMP");
     }
 
     this.subSequenceNumber = subSequenceNumber;

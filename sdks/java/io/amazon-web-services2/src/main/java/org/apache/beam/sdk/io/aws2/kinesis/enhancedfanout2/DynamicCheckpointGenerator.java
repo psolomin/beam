@@ -27,7 +27,7 @@ import software.amazon.awssdk.services.kinesis.model.Shard;
 
 /**
  * Creates {@link KinesisReaderCheckpoint}, which spans over all shards in given stream. List of
- * shards is obtained dynamically on call to {@link #generate(AsyncClientProxy)}.
+ * shards is obtained dynamically on call to {@link #generate(ClientBuilder)}.
  */
 class DynamicCheckpointGenerator implements CheckpointGenerator {
 

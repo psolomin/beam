@@ -18,8 +18,8 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.Checkers.checkNotNull;
+import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.Lists.newArrayList;
 
-import com.google.common.collect.ImmutableList;
 import java.io.IOException;
 import java.util.List;
 import org.apache.beam.sdk.coders.Coder;
@@ -52,9 +52,14 @@ public class KinesisEnhancedFanOutSource
   }
 
   @Override
-  public List<KinesisEnhancedFanOutSource> split(int desiredNumSplits, PipelineOptions options)
-      throws Exception {
-    return ImmutableList.of();
+  public List<KinesisEnhancedFanOutSource> split(int desiredNumSplits, PipelineOptions options) throws Exception {
+    ClientBuilder clientBuilder = new ClientBuilderImpl();
+    KinesisReaderCheckpoint checkpoint = checkpointGenerator.generate(clientBuilder);
+    List<KinesisEnhancedFanOutSource> sources = newArrayList();
+    for (KinesisReaderCheckpoint partition : checkpoint.splitInto(desiredNumSplits)) {
+      sources.add(new KinesisEnhancedFanOutSource(spec, new StaticCheckpointGenerator(partition)));
+    }
+    return sources;
   }
 
   @Override
