@@ -18,13 +18,16 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
 import java.util.List;
+
+import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Creates {@link KinesisReaderCheckpoint} when stored checkpoint is not available or outdated. List
- * of shards is obtained from Kinesis.
+ * of shards is obtained from Kinesis. The result of calling {@link #generate(ClientBuilder)} will
+ * depend on {@link StartingPoint} provided.
  */
 class FromScratchCheckpointGenerator implements CheckpointGenerator {
 
@@ -39,7 +42,7 @@ class FromScratchCheckpointGenerator implements CheckpointGenerator {
   public KinesisReaderCheckpoint generate(ClientBuilder clientBuilder)
       throws TransientKinesisException {
     List<ShardCheckpoint> streamShards =
-        ShardsListingUtils.initSubscribedShardsProgressInfo(config, clientBuilder);
+        ShardsListingUtils.generateShardsCheckpoints(config, clientBuilder);
 
     LOG.info(
         "Creating a checkpoint with following shards {} at {}",

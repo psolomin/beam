@@ -17,13 +17,11 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
-import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
@@ -52,8 +50,7 @@ public class ShardsListingUtils {
     return tryListingShards(listShardsRequest, builder).shards();
   }
 
-  static List<ShardCheckpoint> initSubscribedShardsProgressInfo(
-      Config config, ClientBuilder builder) {
+  static List<ShardCheckpoint> generateShardsCheckpoints(Config config, ClientBuilder builder) {
     ListShardsRequest listShardsRequest =
         ListShardsRequest.builder()
             .streamName(config.getStreamName())
@@ -106,9 +103,5 @@ public class ShardsListingUtils {
 
   private static ShardFilter buildSingleShardFilter(String shardId) {
     return ShardFilter.builder().shardId(shardId).type(ShardFilterType.AFTER_SHARD_ID).build();
-  }
-
-  public static List<Shard> listShardsAtPoint(String streamName, StartingPoint startingPoint) {
-    return Collections.emptyList();
   }
 }
