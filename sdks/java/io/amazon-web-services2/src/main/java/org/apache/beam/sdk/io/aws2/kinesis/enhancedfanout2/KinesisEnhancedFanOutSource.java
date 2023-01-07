@@ -34,15 +34,16 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public class KinesisEnhancedFanOutSource
     extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoint> {
 
-  private final KinesisIO.Read spec;
+  private final KinesisIO.Read readSpec;
   private final CheckpointGenerator checkpointGenerator;
 
-  public KinesisEnhancedFanOutSource(KinesisIO.Read read) {
-    this(read, new DynamicCheckpointGenerator(Config.fromIOSpec(read)));
+  public KinesisEnhancedFanOutSource(KinesisIO.Read readSpec) {
+    this(readSpec, new FromScratchCheckpointGenerator(Config.fromIOSpec(readSpec)));
   }
 
-  private KinesisEnhancedFanOutSource(KinesisIO.Read spec, CheckpointGenerator initialCheckpoint) {
-    this.spec = checkNotNull(spec, "spec");
+  private KinesisEnhancedFanOutSource(
+      KinesisIO.Read readSpec, CheckpointGenerator initialCheckpoint) {
+    this.readSpec = checkNotNull(readSpec, "spec");
     this.checkpointGenerator = checkNotNull(initialCheckpoint, "initialCheckpoint");
   }
 
@@ -53,7 +54,8 @@ public class KinesisEnhancedFanOutSource
     KinesisReaderCheckpoint checkpoint = checkpointGenerator.generate(clientBuilder);
     List<KinesisEnhancedFanOutSource> sources = newArrayList();
     for (KinesisReaderCheckpoint partition : checkpoint.splitInto(desiredNumSplits)) {
-      sources.add(new KinesisEnhancedFanOutSource(spec, new StaticCheckpointGenerator(partition)));
+      sources.add(
+          new KinesisEnhancedFanOutSource(readSpec, new StaticCheckpointGenerator(partition)));
     }
     return sources;
   }
@@ -68,8 +70,8 @@ public class KinesisEnhancedFanOutSource
     }
 
     ClientBuilder builder = new ClientBuilderImpl();
-    KinesisEnhancedFanOutSource source = new KinesisEnhancedFanOutSource(spec);
-    return new KinesisEnhancedFanOutReader(spec, builder, checkpointGenerator, source);
+    KinesisEnhancedFanOutSource source = new KinesisEnhancedFanOutSource(readSpec);
+    return new KinesisEnhancedFanOutReader(readSpec, builder, checkpointGenerator, source);
   }
 
   @Override

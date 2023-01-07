@@ -19,7 +19,10 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
-/** Always returns the same instance of checkpoint. */
+/**
+ * Always returns injected checkpoint. Used when stored checkpoint exists. TODO: add validation to
+ * check if stored checkpoint is "rotten"?
+ */
 class StaticCheckpointGenerator implements CheckpointGenerator {
 
   private final KinesisReaderCheckpoint checkpoint;

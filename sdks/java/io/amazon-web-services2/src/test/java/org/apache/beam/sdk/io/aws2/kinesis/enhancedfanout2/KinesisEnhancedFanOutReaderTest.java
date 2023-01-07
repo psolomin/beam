@@ -31,7 +31,7 @@ public class KinesisEnhancedFanOutReaderTest {
     KinesisIO.Read readSpec = createReadSpec();
     ClientBuilder clientBuilder = KinesisClientProxyStubBehaviours.twoShardsWithRecords();
     CheckpointGenerator checkpointGenerator =
-        new DynamicCheckpointGenerator(Config.fromIOSpec(readSpec));
+        new FromScratchCheckpointGenerator(Config.fromIOSpec(readSpec));
     KinesisEnhancedFanOutSource source = new KinesisEnhancedFanOutSource(readSpec);
     KinesisEnhancedFanOutReader reader =
         new KinesisEnhancedFanOutReader(readSpec, clientBuilder, checkpointGenerator, source);

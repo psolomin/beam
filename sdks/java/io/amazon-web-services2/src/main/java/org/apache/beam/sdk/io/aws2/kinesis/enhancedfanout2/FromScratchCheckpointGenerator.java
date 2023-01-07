@@ -23,15 +23,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Creates {@link KinesisReaderCheckpoint}, which spans over all shards in given stream. List of
- * shards is obtained dynamically on call to {@link #generate(ClientBuilder)}.
+ * Creates {@link KinesisReaderCheckpoint} when stored checkpoint is not available or outdated. List
+ * of shards is obtained from Kinesis.
  */
-class DynamicCheckpointGenerator implements CheckpointGenerator {
+class FromScratchCheckpointGenerator implements CheckpointGenerator {
 
-  private static final Logger LOG = LoggerFactory.getLogger(DynamicCheckpointGenerator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FromScratchCheckpointGenerator.class);
   private final Config config;
 
-  DynamicCheckpointGenerator(Config config) {
+  FromScratchCheckpointGenerator(Config config) {
     this.config = config;
   }
 
