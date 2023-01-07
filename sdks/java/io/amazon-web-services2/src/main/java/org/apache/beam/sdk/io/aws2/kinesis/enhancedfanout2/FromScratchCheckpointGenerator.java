@@ -18,7 +18,6 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
 import java.util.List;
-
 import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
 import org.slf4j.Logger;

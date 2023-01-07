@@ -17,25 +17,25 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
-import static junit.framework.TestCase.assertFalse;
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.helpers.Helpers.createReadSpec;
+import static org.junit.Assert.assertTrue;
 
-import java.io.IOException;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
+import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.helpers.KinesisClientProxyStubBehaviours;
 import org.junit.Test;
 
-public class KinesisEnhancedFanOutReaderTest {
+public class ShardSubscribersPoolImplTest {
   @Test
-  public void testStartAndStop() throws IOException {
+  public void poolStartsAndStops() throws TransientKinesisException {
     KinesisIO.Read readSpec = createReadSpec();
+    Config config = Config.fromIOSpec(readSpec);
     ClientBuilder clientBuilder = KinesisClientProxyStubBehaviours.twoShardsWithRecords();
-    CheckpointGenerator checkpointGenerator =
-        new FromScratchCheckpointGenerator(Config.fromIOSpec(readSpec));
-    KinesisEnhancedFanOutSource source = new KinesisEnhancedFanOutSource(readSpec);
-    KinesisEnhancedFanOutReader reader =
-        new KinesisEnhancedFanOutReader(readSpec, clientBuilder, checkpointGenerator, source);
-
-    assertFalse(reader.start());
+    KinesisReaderCheckpoint initialCheckpoint =
+        new FromScratchCheckpointGenerator(config).generate(clientBuilder);
+    RecordsBuffer buffer = new RecordsBufferImpl(new RecordsBufferStateImpl(initialCheckpoint));
+    ShardSubscribersPool pool = new ShardSubscribersPoolImpl(config, clientBuilder, buffer);
+    assertTrue(pool.start());
+    assertTrue(pool.stop());
   }
 }
