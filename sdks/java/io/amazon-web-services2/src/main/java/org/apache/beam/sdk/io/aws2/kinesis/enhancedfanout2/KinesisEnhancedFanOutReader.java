@@ -20,21 +20,23 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.NoSuchElementException;
 import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
+import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("unused")
 public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader<KinesisRecord> {
 
   private static final Logger LOG = LoggerFactory.getLogger(KinesisEnhancedFanOutReader.class);
 
   private final KinesisIO.Read spec;
+  private final Config config;
   private final ClientBuilder clientBuilder;
   private final KinesisEnhancedFanOutSource source;
   private final CheckpointGenerator checkpointGenerator;
@@ -51,21 +53,20 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
     this.clientBuilder = checkNotNull(clientBuilder, "clientBuilder");
     this.checkpointGenerator = checkNotNull(checkpointGenerator, "checkpointGenerator");
     this.source = source;
+    this.config = Config.fromIOSpec(spec);
   }
 
   @Override
   public boolean start() throws IOException {
     LOG.info("Starting reader using {}", checkpointGenerator);
-    Config config = Config.fromIOSpec(spec);
-    List<ShardCheckpoint> checkpoints =
-        ShardsListingUtils.initSubscribedShardsProgressInfo(config, clientBuilder);
-    KinesisReaderCheckpoint initialCheckpoint = new KinesisReaderCheckpoint(checkpoints);
-    RecordsBufferState recordsBufferState = new RecordsBufferStateImpl(initialCheckpoint);
-    RecordsBuffer recordsBuffer = new RecordsBufferImpl(recordsBufferState);
-    ShardSubscribersPool pool = new ShardSubscribersPoolImpl(recordsBuffer);
-    boolean isRunning = pool.start();
-    shardSubscribersPool = CustomOptional.of(pool);
-    return isRunning && advance(); // should return false if no input is currently available
+    try {
+      ShardSubscribersPool pool = createPool();
+      boolean isRunning = pool.start();
+      shardSubscribersPool = CustomOptional.of(pool);
+      return isRunning && advance(); // should return false if no input is currently available
+    } catch (TransientKinesisException e) {
+      throw new IOException(e);
+    }
   }
 
   @Override
@@ -114,5 +115,12 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
   @Override
   public UnboundedSource<KinesisRecord, ?> getCurrentSource() {
     return source;
+  }
+
+  private ShardSubscribersPool createPool() throws TransientKinesisException {
+    KinesisReaderCheckpoint initialCheckpoint = checkpointGenerator.generate(clientBuilder);
+    RecordsBufferState recordsBufferState = new RecordsBufferStateImpl(initialCheckpoint);
+    RecordsBuffer recordsBuffer = new RecordsBufferImpl(recordsBufferState);
+    return new ShardSubscribersPoolImpl(recordsBuffer);
   }
 }
