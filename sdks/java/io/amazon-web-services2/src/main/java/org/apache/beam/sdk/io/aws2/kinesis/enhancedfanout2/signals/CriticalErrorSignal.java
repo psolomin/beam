@@ -26,7 +26,7 @@ public class CriticalErrorSignal implements ShardSubscriberSignal {
     this.error = error;
   }
 
-  public static CriticalErrorSignal fromError(String senderId, ShardEvent event) {
+  public static CriticalErrorSignal fromError(String senderId, ShardEventWrapper event) {
     return new CriticalErrorSignal(senderId, event.getError());
   }
 

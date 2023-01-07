@@ -20,34 +20,35 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.signals;
 import java.util.Optional;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 
-public class ShardEvent {
+public class ShardEventWrapper {
   private final ShardEventType type;
   private final Optional<SubscribeToShardEvent> event;
   private final Optional<Throwable> err;
 
-  private ShardEvent(
+  private ShardEventWrapper(
       ShardEventType type, Optional<SubscribeToShardEvent> event, Optional<Throwable> err) {
     this.type = type;
     this.event = event;
     this.err = err;
   }
 
-  static ShardEvent fromNext(SubscribeToShardEvent event) {
+  public static ShardEventWrapper fromNext(SubscribeToShardEvent event) {
     if (isReShard(event)) {
-      return new ShardEvent(ShardEventType.RE_SHARD, Optional.of(event), Optional.empty());
+      return new ShardEventWrapper(ShardEventType.RE_SHARD, Optional.of(event), Optional.empty());
     } else if (isEventWithRecords(event)) {
-      return new ShardEvent(ShardEventType.RECORDS, Optional.of(event), Optional.empty());
+      return new ShardEventWrapper(ShardEventType.RECORDS, Optional.of(event), Optional.empty());
     } else {
       throw new IllegalStateException(String.format("Unknown event type, no scenario: %s", event));
     }
   }
 
-  static ShardEvent subscriptionComplete() {
-    return new ShardEvent(ShardEventType.SUBSCRIPTION_COMPLETE, Optional.empty(), Optional.empty());
+  public static ShardEventWrapper subscriptionComplete() {
+    return new ShardEventWrapper(
+        ShardEventType.SUBSCRIPTION_COMPLETE, Optional.empty(), Optional.empty());
   }
 
-  static ShardEvent error(Throwable err) {
-    return new ShardEvent(ShardEventType.ERROR, Optional.empty(), Optional.of(err));
+  public static ShardEventWrapper error(Throwable err) {
+    return new ShardEventWrapper(ShardEventType.ERROR, Optional.empty(), Optional.of(err));
   }
 
   ShardEventType type() {
