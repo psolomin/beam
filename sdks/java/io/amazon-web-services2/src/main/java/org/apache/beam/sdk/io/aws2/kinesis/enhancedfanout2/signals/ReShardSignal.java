@@ -29,7 +29,7 @@ public class ReShardSignal implements ShardSubscriberSignal {
     this.childShards = childShards;
   }
 
-  public static ReShardSignal fromShardEvent(String senderId, ShardEvent event) {
+  public static ReShardSignal fromShardEvent(String senderId, ShardEventWrapper event) {
     return new ReShardSignal(senderId, event.getWrappedEvent().childShards());
   }
 

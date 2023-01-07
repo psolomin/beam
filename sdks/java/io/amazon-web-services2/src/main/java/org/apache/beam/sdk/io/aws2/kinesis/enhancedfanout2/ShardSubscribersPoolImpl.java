@@ -17,7 +17,9 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -54,8 +56,8 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
       new LinkedBlockingQueue<>(signalsQueueCapacity);
   private final AtomicBoolean isRunning = new AtomicBoolean(false);
   private final CountDownLatch consumerStartedLatch;
-
   private final RecordsBuffer recordsBuffer;
+  private final Map<String, ShardSubscriber> shardSubscribers = new ConcurrentHashMap<>();
 
   ShardSubscribersPoolImpl(
       Config config, ClientBuilder clientBuilder, RecordsBuffer recordsBuffer) {
@@ -129,6 +131,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
   public void run() {
     isRunning.set(true);
     LOG.info(LOG_MSG_TEMPLATE + " Started", config.getStreamName(), config.getConsumerArn());
+    createAndSubmitSubscribers();
     consumerStartedLatch.countDown();
 
     while (isRunning.get()) {
@@ -145,6 +148,19 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
         LOG.warn("Failed to take re-shard signal from queue. ", e);
       }
     }
+  }
+
+  @SuppressWarnings("FutureReturnValueIgnored")
+  private void createAndSubmitSubscribers() {
+    KinesisReaderCheckpoint initialCheckpoint = recordsBuffer.getCheckpointMark();
+    initialCheckpoint
+        .iterator()
+        .forEachRemaining(
+            shardCheckpoint -> {
+              ShardSubscriber s = new ShardSubscriberImpl(config, shardCheckpoint.getShardId());
+              shardSubscribers.put(shardCheckpoint.getShardId(), s);
+              executorService.submit(s);
+            });
   }
 
   private void processReShardSignal(ReShardSignal reShardSignal) throws InterruptedException {
@@ -192,5 +208,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
     return false;
   }
 
-  void cleanUpResources() {}
+  void cleanUpResources() {
+    shardSubscribers.forEach((k, v) -> v.stop());
+  }
 }
