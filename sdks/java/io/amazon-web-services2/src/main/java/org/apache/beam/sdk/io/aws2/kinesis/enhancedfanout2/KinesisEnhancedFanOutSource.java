@@ -38,12 +38,7 @@ public class KinesisEnhancedFanOutSource
   private final CheckpointGenerator checkpointGenerator;
 
   public KinesisEnhancedFanOutSource(KinesisIO.Read read) {
-    this(
-        read,
-        new DynamicCheckpointGenerator(
-            checkNotNull(read.getStreamName(), "streamName"),
-            checkNotNull(read.getConsumerArn(), "consumerArn"),
-            checkNotNull(read.getInitialPosition(), "initialPosition")));
+    this(read, new DynamicCheckpointGenerator(Config.fromIOSpec(read)));
   }
 
   private KinesisEnhancedFanOutSource(KinesisIO.Read spec, CheckpointGenerator initialCheckpoint) {
@@ -52,7 +47,8 @@ public class KinesisEnhancedFanOutSource
   }
 
   @Override
-  public List<KinesisEnhancedFanOutSource> split(int desiredNumSplits, PipelineOptions options) throws Exception {
+  public List<KinesisEnhancedFanOutSource> split(int desiredNumSplits, PipelineOptions options)
+      throws Exception {
     ClientBuilder clientBuilder = new ClientBuilderImpl();
     KinesisReaderCheckpoint checkpoint = checkpointGenerator.generate(clientBuilder);
     List<KinesisEnhancedFanOutSource> sources = newArrayList();

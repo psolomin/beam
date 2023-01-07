@@ -18,12 +18,9 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
 import java.util.List;
-import java.util.stream.Collectors;
-import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import software.amazon.awssdk.services.kinesis.model.Shard;
 
 /**
  * Creates {@link KinesisReaderCheckpoint}, which spans over all shards in given stream. List of
@@ -32,35 +29,28 @@ import software.amazon.awssdk.services.kinesis.model.Shard;
 class DynamicCheckpointGenerator implements CheckpointGenerator {
 
   private static final Logger LOG = LoggerFactory.getLogger(DynamicCheckpointGenerator.class);
-  private final String streamName;
-  private final String consumerArn;
-  private final StartingPoint startingPoint;
+  private final Config config;
 
-  DynamicCheckpointGenerator(String streamName, String consumerArn, StartingPoint startingPoint) {
-    this.streamName = streamName;
-    this.consumerArn = consumerArn;
-    this.startingPoint = startingPoint;
+  DynamicCheckpointGenerator(Config config) {
+    this.config = config;
   }
 
   @Override
   public KinesisReaderCheckpoint generate(ClientBuilder clientBuilder)
       throws TransientKinesisException {
-    List<Shard> streamShards = ShardsListingUtils.listShardsAtPoint(streamName, startingPoint);
+    List<ShardCheckpoint> streamShards =
+        ShardsListingUtils.initSubscribedShardsProgressInfo(config, clientBuilder);
 
     LOG.info(
         "Creating a checkpoint with following shards {} at {}",
         streamShards,
-        startingPoint.getTimestamp());
-    return new KinesisReaderCheckpoint(
-        streamShards.stream()
-            .map(
-                shard ->
-                    new ShardCheckpoint(streamName, consumerArn, shard.shardId(), startingPoint))
-            .collect(Collectors.toList()));
+        config.getStartingPoint().getTimestamp());
+    return new KinesisReaderCheckpoint(streamShards);
   }
 
   @Override
   public String toString() {
-    return String.format("Checkpoint generator for %s: %s", streamName, startingPoint);
+    return String.format(
+        "Checkpoint generator for %s: %s", config.getStreamName(), config.getStartingPoint());
   }
 }

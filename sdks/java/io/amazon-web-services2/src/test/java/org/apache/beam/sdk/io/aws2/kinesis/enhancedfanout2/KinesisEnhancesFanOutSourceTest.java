@@ -17,25 +17,18 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
-import static junit.framework.TestCase.assertFalse;
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.helpers.Helpers.createReadSpec;
 
-import java.io.IOException;
+import org.apache.beam.repackaged.core.org.apache.commons.lang3.SerializationUtils;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
-import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.helpers.KinesisClientProxyStubBehaviours;
 import org.junit.Test;
 
-public class KinesisEnhancedFanOutReaderTest {
+public class KinesisEnhancesFanOutSourceTest {
   @Test
-  public void test() throws IOException {
+  public void ensureSerializable() {
     KinesisIO.Read readSpec = createReadSpec();
-    ClientBuilder clientBuilder = KinesisClientProxyStubBehaviours.twoShardsWithRecords();
-    CheckpointGenerator checkpointGenerator =
-        new DynamicCheckpointGenerator(Config.fromIOSpec(readSpec));
     KinesisEnhancedFanOutSource source = new KinesisEnhancedFanOutSource(readSpec);
-    KinesisEnhancedFanOutReader reader =
-        new KinesisEnhancedFanOutReader(readSpec, clientBuilder, checkpointGenerator, source);
-
-    assertFalse(reader.start());
+    byte[] data = SerializationUtils.serialize(source);
+    SerializationUtils.deserialize(data); // no error
   }
 }

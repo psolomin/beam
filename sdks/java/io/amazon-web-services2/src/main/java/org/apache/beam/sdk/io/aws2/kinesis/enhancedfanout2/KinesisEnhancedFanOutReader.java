@@ -65,7 +65,7 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
     ShardSubscribersPool pool = new ShardSubscribersPoolImpl(recordsBuffer);
     boolean isRunning = pool.start();
     shardSubscribersPool = CustomOptional.of(pool);
-    return isRunning;
+    return isRunning && advance(); // should return false if no input is currently available
   }
 
   @Override
