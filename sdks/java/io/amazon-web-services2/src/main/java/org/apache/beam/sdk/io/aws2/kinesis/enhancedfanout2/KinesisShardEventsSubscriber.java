@@ -36,7 +36,7 @@ class KinesisShardEventsSubscriber implements Subscriber<SubscribeToShardEventSt
   private static final long enqueueTimeoutMs = 35_000;
 
   private final BlockingQueue<ShardEventWrapper> queue;
-  private final CountDownLatch eventsHandlerReadyLatch;
+  private final CountDownLatch isRunningLatch;
   private final String streamName;
   private final String consumerArn;
   private final String shardId;
@@ -46,12 +46,12 @@ class KinesisShardEventsSubscriber implements Subscriber<SubscribeToShardEventSt
 
   KinesisShardEventsSubscriber(
       BlockingQueue<ShardEventWrapper> queue,
-      CountDownLatch eventsHandlerReadyLatch,
+      CountDownLatch isRunningLatch,
       String streamName,
       String consumerArn,
       String shardId) {
     this.queue = queue;
-    this.eventsHandlerReadyLatch = eventsHandlerReadyLatch;
+    this.isRunningLatch = isRunningLatch;
     this.streamName = streamName;
     this.consumerArn = consumerArn;
     this.shardId = shardId;
@@ -60,7 +60,7 @@ class KinesisShardEventsSubscriber implements Subscriber<SubscribeToShardEventSt
   @Override
   public void onSubscribe(Subscription subscription) {
     s = CustomOptional.of(subscription);
-    eventsHandlerReadyLatch.countDown();
+    isRunningLatch.countDown();
   }
 
   /** AWS SDK Netty thread calls this at least every ~ 5 seconds even when no new records arrive. */

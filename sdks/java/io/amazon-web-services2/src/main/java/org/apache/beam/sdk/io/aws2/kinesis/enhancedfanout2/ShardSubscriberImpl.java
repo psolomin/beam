@@ -17,27 +17,58 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.signals.ConsumerError;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.signals.RecoverableConsumerError;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.signals.ShardEventWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.services.kinesis.model.StartingPosition;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
+import software.amazon.kinesis.retrieval.AggregatorUtil;
+import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 class ShardSubscriberImpl implements ShardSubscriber {
   private static final Logger LOG = LoggerFactory.getLogger(ShardSubscriberImpl.class);
   private final String shardId;
   private final Config config;
-  private final AtomicBoolean isRunning;
+  private final ClientBuilder clientBuilder;
+  private final ShardCheckpoint startCheckpoint;
+  private final BlockingQueue<ShardEventWrapper> shardEventsBuffer = new LinkedBlockingQueue<>(2);
+  private final AtomicBoolean isRunning = new AtomicBoolean(false);
 
-  ShardSubscriberImpl(Config config, String shardId) {
+  private final long startTimeoutMs = 10_000L;
+  private final long bufferPollTimeoutMs = 7_000L;
+
+  ShardSubscriberImpl(
+      Config config, String shardId, ClientBuilder clientBuilder, ShardCheckpoint startCheckpoint) {
     this.config = config;
     this.shardId = shardId;
-    this.isRunning = new AtomicBoolean(true);
+    this.clientBuilder = clientBuilder;
+    this.startCheckpoint = startCheckpoint;
+    this.isRunning.set(true);
   }
 
   @Override
   public void run() {
     while (isRunning.get()) {
       try {
-        Thread.sleep(1_000);
+        boolean reSubscribe = subscribe(startCheckpoint.toStartingPosition(), this::consume);
+        if (!reSubscribe) break;
       } catch (InterruptedException e) {
         LOG.warn(
             "Interrupted in subscription loop for stream {} shard {}",
@@ -49,7 +80,169 @@ class ShardSubscriberImpl implements ShardSubscriber {
 
   @Override
   public boolean stop() {
+    // TODO: it takes too long to stop the subscription
+    // but bufferPollTimeoutMs can't be < 5 seconds otherwise loop will re-subscribe all the time
     isRunning.set(false);
     return true;
+  }
+
+  boolean subscribe(
+      StartingPosition startingPosition, Consumer<SubscribeToShardEvent> eventConsumer)
+      throws InterruptedException {
+    LOG.info("Creating subscription");
+    KinesisShardEventsSubscriber shardEventsSubscriber = doSubscribe(startingPosition);
+    return startConsumeLoop(eventConsumer, shardEventsSubscriber);
+  }
+
+  private KinesisShardEventsSubscriber doSubscribe(StartingPosition startingPosition)
+      throws InterruptedException {
+    UUID subscribeRequestId = UUID.randomUUID();
+    SubscribeToShardRequest request =
+        SubscribeToShardRequest.builder()
+            .consumerARN(config.getConsumerArn())
+            .shardId(shardId)
+            .startingPosition(startingPosition)
+            .build();
+
+    LOG.info("Starting subscribe request {} - {}", subscribeRequestId, request);
+    CountDownLatch eventsHandlerReadyLatch = new CountDownLatch(1);
+
+    KinesisShardEventsSubscriber shardEventsSubscriber =
+        new KinesisShardEventsSubscriber(
+            shardEventsBuffer,
+            eventsHandlerReadyLatch,
+            config.getStreamName(),
+            config.getConsumerArn(),
+            shardId);
+
+    SubscribeToShardResponseHandler responseHandler =
+        SubscribeToShardResponseHandler.builder()
+            .onError(
+                e ->
+                    LOG.error(
+                        "Failed to execute subscribe request {} - {}",
+                        subscribeRequestId,
+                        request,
+                        e))
+            .subscriber(() -> shardEventsSubscriber)
+            .build();
+
+    AsyncClientProxy asyncClientProxy = clientBuilder.build();
+    CompletableFuture<Void> f = asyncClientProxy.subscribeToShard(request, responseHandler);
+    boolean subscriptionWasEstablished =
+        eventsHandlerReadyLatch.await(startTimeoutMs, TimeUnit.MILLISECONDS);
+
+    if (!subscriptionWasEstablished) {
+      LOG.error("Subscribe request {} failed.", subscribeRequestId);
+      if (!f.isCompletedExceptionally())
+        LOG.warn(
+            "subscribeToShard request {} failed, but future was not complete.", subscribeRequestId);
+      // TODO: signal error to coordinator
+      shardEventsSubscriber.cancel();
+      throw new RuntimeException();
+    }
+
+    LOG.info("Subscription established.");
+    shardEventsSubscriber.requestRecord();
+    return shardEventsSubscriber;
+  }
+
+  private boolean startConsumeLoop(
+      Consumer<SubscribeToShardEvent> eventConsumer,
+      KinesisShardEventsSubscriber shardEventsSubscriber)
+      throws InterruptedException {
+    while (isRunning.get()) {
+      ShardEventWrapper event = shardEventsBuffer.poll(bufferPollTimeoutMs, TimeUnit.MILLISECONDS);
+
+      if (event == null) {
+        LOG.info("No records available after {}", bufferPollTimeoutMs);
+        break;
+      }
+
+      LOG.debug("Received event {}", event);
+      switch (event.type()) {
+        case SUBSCRIPTION_COMPLETE:
+          {
+            LOG.info("Shard {} - subscription complete", shardId);
+            return true;
+          }
+        case ERROR:
+          {
+            if (maybeRecoverableError(event)) return true;
+            else {
+              handleCriticalError(event);
+              return false;
+            }
+          }
+        case RECORDS: // TODO: this may throw
+          {
+            SubscribeToShardEvent subscribeToShardEvent = event.getWrappedEvent();
+            eventConsumer.accept(subscribeToShardEvent);
+            shardEventsSubscriber.requestRecord();
+            break;
+          }
+        case RE_SHARD:
+          {
+            handleReShard(event);
+            return false;
+          }
+        default:
+          {
+            LOG.warn("Unknown event type, ignoring: {}", event);
+            break;
+          }
+      }
+    }
+    shardEventsSubscriber.cancel();
+    return false;
+  }
+
+  void handleReShard(ShardEventWrapper event) {
+    isRunning.set(false);
+  }
+
+  void handleCriticalError(ShardEventWrapper event) {}
+
+  private boolean maybeRecoverableError(ShardEventWrapper event) {
+    Throwable error = event.getError();
+    Throwable cause;
+    if ((error instanceof CompletionException || error instanceof ExecutionException)
+        && error.getCause() != null) {
+      cause = ConsumerError.toConsumerError(error.getCause());
+    } else {
+      cause = ConsumerError.toConsumerError(error);
+    }
+
+    String msgTemplate = "Received error from shard handler. Stream {} Consumer {} Shard {}: {}";
+    LOG.warn(
+        msgTemplate,
+        config.getStreamName(),
+        config.getConsumerArn(),
+        shardId,
+        error.getClass().getName(),
+        cause);
+    return isRecoverable(cause);
+  }
+
+  private boolean isRecoverable(Throwable cause) {
+    if (cause instanceof RecoverableConsumerError) {
+      LOG.warn("Netty thread was not able to submit outstanding record.");
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  private void consume(SubscribeToShardEvent event) {
+    List<KinesisClientRecord> clientRecords;
+    if (!event.records().isEmpty()) {
+      clientRecords =
+          new AggregatorUtil()
+              .deaggregate(
+                  event.records().stream()
+                      .map(KinesisClientRecord::fromRecord)
+                      .collect(Collectors.toList()));
+    } else clientRecords = Collections.emptyList();
+    LOG.info("Received records {}", clientRecords);
   }
 }
