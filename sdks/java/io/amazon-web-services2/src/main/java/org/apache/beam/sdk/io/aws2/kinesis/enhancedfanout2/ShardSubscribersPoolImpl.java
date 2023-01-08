@@ -58,13 +58,18 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
   private final CountDownLatch consumerStartedLatch;
   private final RecordsBuffer recordsBuffer;
   private final Map<String, ShardSubscriber> shardSubscribers = new ConcurrentHashMap<>();
+  private final ShardSubscribersPoolState state;
 
   ShardSubscribersPoolImpl(
-      Config config, ClientBuilder clientBuilder, RecordsBuffer recordsBuffer) {
+      Config config,
+      ClientBuilder clientBuilder,
+      ShardSubscribersPoolState initialState,
+      RecordsBuffer recordsBuffer) {
     this.config = config;
     this.clientBuilder = clientBuilder;
     this.recordsBuffer = recordsBuffer;
     this.executorService = createThreadPool(config);
+    this.state = initialState;
     this.consumerStartedLatch = new CountDownLatch(1);
   }
 
@@ -101,12 +106,12 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
 
   @Override
   public Instant getWatermark() {
-    return recordsBuffer.getWatermark();
+    return state.getWatermark();
   }
 
   @Override
   public KinesisReaderCheckpoint getCheckpointMark() {
-    return recordsBuffer.getCheckpointMark();
+    return state.getCheckpointMark();
   }
 
   private static ExecutorService createThreadPool(Config config) {
@@ -152,14 +157,14 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
 
   @SuppressWarnings("FutureReturnValueIgnored")
   private void createAndSubmitSubscribers() {
-    KinesisReaderCheckpoint initialCheckpoint = recordsBuffer.getCheckpointMark();
+    KinesisReaderCheckpoint initialCheckpoint = state.getCheckpointMark();
     initialCheckpoint
         .iterator()
         .forEachRemaining(
             shardCheckpoint -> {
               ShardSubscriber s =
                   new ShardSubscriberImpl(
-                      config, shardCheckpoint.getShardId(), clientBuilder, recordsBuffer);
+                      config, shardCheckpoint.getShardId(), clientBuilder, state, recordsBuffer);
               shardSubscribers.put(shardCheckpoint.getShardId(), s);
               executorService.submit(s);
             });

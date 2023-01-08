@@ -44,8 +44,9 @@ public class ShardSubscribersPoolImplTest {
         KinesisClientProxyStubBehaviours.twoShardsWithRecords();
     KinesisReaderCheckpoint initialCheckpoint =
         new FromScratchCheckpointGenerator(config).generate(clientBuilder);
-    RecordsBuffer buffer = new RecordsBufferImpl(new RecordsBufferStateImpl(initialCheckpoint));
-    ShardSubscribersPool pool = new ShardSubscribersPoolImpl(config, clientBuilder, buffer);
+    ShardSubscribersPoolState state = new ShardSubscribersPoolStateImpl(initialCheckpoint);
+    RecordsBuffer buffer = new RecordsBufferImpl(state);
+    ShardSubscribersPool pool = new ShardSubscribersPoolImpl(config, clientBuilder, state, buffer);
     assertTrue(pool.start());
     List<KinesisRecord> actualRecords = waitForRecords(pool, 12);
     assertEquals(12, actualRecords.size());

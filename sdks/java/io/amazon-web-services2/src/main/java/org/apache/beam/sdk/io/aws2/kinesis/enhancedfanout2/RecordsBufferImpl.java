@@ -21,7 +21,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
-import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,10 +30,10 @@ class RecordsBufferImpl implements RecordsBuffer {
   private final int maxCapacity = 20_000;
   private final long offerTimeoutMs = 5_000L;
   private final long pollTimeoutMs = 5_000L;
-  private final RecordsBufferState state;
+  private final ShardSubscribersPoolState state;
   private final BlockingQueue<Record> queue;
 
-  RecordsBufferImpl(RecordsBufferState state) {
+  RecordsBufferImpl(ShardSubscribersPoolState state) {
     this.state = state;
     this.queue = new LinkedBlockingQueue<>(maxCapacity);
   }
@@ -61,20 +60,5 @@ class RecordsBufferImpl implements RecordsBuffer {
       LOG.warn("Interrupted while fetching record");
       return CustomOptional.absent();
     }
-  }
-
-  @Override
-  public ShardCheckpoint getCheckpoint(String shardId) {
-    return state.getCheckpoint(shardId);
-  }
-
-  @Override
-  public Instant getWatermark() {
-    return state.getWatermark();
-  }
-
-  @Override
-  public KinesisReaderCheckpoint getCheckpointMark() {
-    return state.getCheckpointMark();
   }
 }
