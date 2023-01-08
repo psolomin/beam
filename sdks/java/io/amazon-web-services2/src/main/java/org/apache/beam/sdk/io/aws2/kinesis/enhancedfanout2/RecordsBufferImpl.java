@@ -64,6 +64,11 @@ class RecordsBufferImpl implements RecordsBuffer {
   }
 
   @Override
+  public ShardCheckpoint getCheckpoint(String shardId) {
+    return state.getCheckpoint(shardId);
+  }
+
+  @Override
   public Instant getWatermark() {
     return state.getWatermark();
   }

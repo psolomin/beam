@@ -46,7 +46,6 @@ class ShardSubscriberImpl implements ShardSubscriber {
   private static final Logger LOG = LoggerFactory.getLogger(ShardSubscriberImpl.class);
   private final String shardId;
   private final Config config;
-  private final ShardCheckpoint startCheckpoint;
   private final BlockingQueue<ShardEventWrapper> shardEventsBuffer = new LinkedBlockingQueue<>(2);
   private final AtomicBoolean isRunning = new AtomicBoolean(false);
   private final RecordsBuffer recordsBuffer;
@@ -56,14 +55,9 @@ class ShardSubscriberImpl implements ShardSubscriber {
   private final long bufferPollTimeoutMs = 7_000L;
 
   ShardSubscriberImpl(
-      Config config,
-      String shardId,
-      ClientBuilder clientBuilder,
-      ShardCheckpoint startCheckpoint,
-      RecordsBuffer recordsBuffer) {
+      Config config, String shardId, ClientBuilder clientBuilder, RecordsBuffer recordsBuffer) {
     this.config = config;
     this.shardId = shardId;
-    this.startCheckpoint = startCheckpoint;
     this.recordsBuffer = recordsBuffer;
     this.isRunning.set(true);
     this.asyncClientProxy = clientBuilder.build();
@@ -73,7 +67,8 @@ class ShardSubscriberImpl implements ShardSubscriber {
   public void run() {
     while (isRunning.get()) {
       try {
-        boolean reSubscribe = subscribe(startCheckpoint.toStartingPosition(), this::consume);
+        ShardCheckpoint shardCheckpoint = recordsBuffer.getCheckpoint(shardId);
+        boolean reSubscribe = subscribe(shardCheckpoint.toStartingPosition(), this::consume);
         if (!reSubscribe) break;
       } catch (InterruptedException e) {
         LOG.warn(

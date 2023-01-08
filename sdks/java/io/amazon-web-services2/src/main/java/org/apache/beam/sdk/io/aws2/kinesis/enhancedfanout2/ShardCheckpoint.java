@@ -65,26 +65,14 @@ public class ShardCheckpoint implements Serializable {
         consumerArn,
         shardId,
         ShardIteratorType.fromValue(startingPoint.getPositionName()),
-        startingPoint.getTimestamp());
-  }
-
-  public ShardCheckpoint(
-      String streamName,
-      String consumerArn,
-      String shardId,
-      ShardIteratorType shardIteratorType,
-      Instant timestamp) {
-    this(
-        streamName,
-        consumerArn,
-        shardId,
-        shardIteratorType,
         CustomOptional.absent(),
         CustomOptional.absent(),
-        CustomOptional.of(timestamp));
+        startingPoint.getTimestamp() != null
+            ? CustomOptional.of(startingPoint.getTimestamp())
+            : CustomOptional.absent());
   }
 
-  public ShardCheckpoint(
+  private ShardCheckpoint(
       String streamName,
       String consumerArn,
       String shardId,
@@ -127,7 +115,7 @@ public class ShardCheckpoint implements Serializable {
       checkArgument(!timestamp.isPresent(), "You must provide timestamp for AT_TIMESTAMP");
     } else {
       checkArgument(
-          timestamp.isPresent(),
+          !timestamp.isPresent(),
           "Timestamp must be empty for an iterator type other than AT_TIMESTAMP");
     }
 
