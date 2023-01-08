@@ -17,8 +17,8 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
-import static junit.framework.TestCase.assertFalse;
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.helpers.Helpers.createReadSpec;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
@@ -36,6 +36,7 @@ public class KinesisEnhancedFanOutReaderTest {
     KinesisEnhancedFanOutReader reader =
         new KinesisEnhancedFanOutReader(readSpec, clientBuilder, checkpointGenerator, source);
 
-    assertFalse(reader.start());
+    assertTrue(reader.start());
+    reader.close();
   }
 }
