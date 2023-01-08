@@ -17,17 +17,39 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableMap;
 import org.joda.time.Instant;
 
 class RecordsBufferStateImpl implements RecordsBufferState {
-  private final KinesisReaderCheckpoint initialCheckpoint;
+  private final ConcurrentMap<String, ShardCheckpoint> shardsCheckpointsMap;
 
   RecordsBufferStateImpl(KinesisReaderCheckpoint initialCheckpoint) {
-    this.initialCheckpoint = initialCheckpoint;
+    ImmutableMap.Builder<String, ShardCheckpoint> b = ImmutableMap.builder();
+    for (ShardCheckpoint shardCheckpoint : initialCheckpoint) {
+      b.put(shardCheckpoint.getShardId(), shardCheckpoint);
+    }
+    this.shardsCheckpointsMap = new ConcurrentHashMap<>(b.build());
   }
 
   @Override
-  public void ackRecord(Record record) {}
+  public void ackRecord(Record record) {
+    if (record.getKinesisRecord().isPresent()) {
+      shardsCheckpointsMap.computeIfPresent(
+          record.getShardId(),
+          (k, v) ->
+              v.moveAfter(record.getKinesisRecord().get(), record.getContinuationSequenceNumber()));
+    } else {
+      shardsCheckpointsMap.computeIfPresent(
+          record.getShardId(), (k, v) -> v.moveAfter(record.getContinuationSequenceNumber()));
+    }
+  }
+
+  @Override
+  public ShardCheckpoint getCheckpoint(String shardId) {
+    return Checkers.checkNotNull(shardsCheckpointsMap.get(shardId), shardId);
+  }
 
   @Override
   public Instant getWatermark() {
@@ -36,6 +58,6 @@ class RecordsBufferStateImpl implements RecordsBufferState {
 
   @Override
   public KinesisReaderCheckpoint getCheckpointMark() {
-    return initialCheckpoint;
+    return new KinesisReaderCheckpoint(shardsCheckpointsMap.values());
   }
 }

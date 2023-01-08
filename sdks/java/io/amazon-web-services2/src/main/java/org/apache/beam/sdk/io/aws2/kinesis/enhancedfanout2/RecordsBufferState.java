@@ -22,6 +22,8 @@ import org.joda.time.Instant;
 interface RecordsBufferState {
   void ackRecord(Record record);
 
+  ShardCheckpoint getCheckpoint(String shardId);
+
   // Beam-specific methods
   Instant getWatermark();
 

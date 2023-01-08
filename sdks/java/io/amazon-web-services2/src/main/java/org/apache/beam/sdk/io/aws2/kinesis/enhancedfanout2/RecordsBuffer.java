@@ -25,6 +25,8 @@ interface RecordsBuffer {
 
   CustomOptional<Record> fetchOne();
 
+  ShardCheckpoint getCheckpoint(String shardId);
+
   // Beam-specific methods
   Instant getWatermark();
 

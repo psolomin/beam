@@ -27,15 +27,21 @@ import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.helpers.KinesisClientBuilderStub;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.helpers.KinesisClientProxyStubBehaviours;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 import org.junit.Test;
+import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
+import software.amazon.awssdk.services.kinesis.model.StartingPosition;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 
 public class ShardSubscribersPoolImplTest {
   @Test
   public void poolHasRecords() throws TransientKinesisException {
     KinesisIO.Read readSpec = createReadSpec();
     Config config = Config.fromIOSpec(readSpec);
-    ClientBuilder clientBuilder = KinesisClientProxyStubBehaviours.twoShardsWithRecords();
+    KinesisClientBuilderStub clientBuilder =
+        KinesisClientProxyStubBehaviours.twoShardsWithRecords();
     KinesisReaderCheckpoint initialCheckpoint =
         new FromScratchCheckpointGenerator(config).generate(clientBuilder);
     RecordsBuffer buffer = new RecordsBufferImpl(new RecordsBufferStateImpl(initialCheckpoint));
@@ -43,6 +49,15 @@ public class ShardSubscribersPoolImplTest {
     assertTrue(pool.start());
     List<KinesisRecord> actualRecords = waitForRecords(pool, 12);
     assertEquals(12, actualRecords.size());
+    // 2 shards x (1 initial subscribe + 1 re-subscribe)
+    assertEquals(4, clientBuilder.subscribeRequestsSeen().size());
+    List<SubscribeToShardRequest> expectedSubscribeRequests =
+        ImmutableList.of(
+            subscribeLatest("shard-000"),
+            subscribeLatest("shard-001"),
+            subscribeSeqNumber("shard-000", "2"),
+            subscribeSeqNumber("shard-001", "2"));
+    assertTrue(expectedSubscribeRequests.containsAll(clientBuilder.subscribeRequestsSeen()));
     assertTrue(pool.stop());
   }
 
@@ -56,5 +71,25 @@ public class ShardSubscribersPoolImplTest {
       i++;
     }
     return records;
+  }
+
+  private static SubscribeToShardRequest subscribeLatest(String shardId) {
+    return SubscribeToShardRequest.builder()
+        .consumerARN("consumer-01")
+        .shardId(shardId)
+        .startingPosition(StartingPosition.builder().type(ShardIteratorType.LATEST).build())
+        .build();
+  }
+
+  private static SubscribeToShardRequest subscribeSeqNumber(String shardId, String seqNumber) {
+    return SubscribeToShardRequest.builder()
+        .consumerARN("consumer-01")
+        .shardId(shardId)
+        .startingPosition(
+            StartingPosition.builder()
+                .type(ShardIteratorType.AFTER_SEQUENCE_NUMBER)
+                .sequenceNumber(seqNumber)
+                .build())
+        .build();
   }
 }
