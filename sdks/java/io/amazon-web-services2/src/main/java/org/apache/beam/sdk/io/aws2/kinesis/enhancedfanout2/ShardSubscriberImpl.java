@@ -53,6 +53,9 @@ class ShardSubscriberImpl implements ShardSubscriber {
   private final AsyncClientProxy asyncClientProxy;
 
   private final long startTimeoutMs = 10_000L;
+
+  // If network is OK, but the shard has no records, it will still receive
+  // empty-msg every ~ 5 seconds which we should use for checkpointing.
   private final long bufferPollTimeoutMs = 7_000L;
 
   ShardSubscriberImpl(
@@ -161,7 +164,7 @@ class ShardSubscriberImpl implements ShardSubscriber {
       ShardEventWrapper event = shardEventsBuffer.poll(bufferPollTimeoutMs, TimeUnit.MILLISECONDS);
 
       if (event == null) {
-        LOG.info("No records available after {}", bufferPollTimeoutMs);
+        LOG.warn("No records available after {}", bufferPollTimeoutMs);
         break;
       }
 
@@ -200,6 +203,11 @@ class ShardSubscriberImpl implements ShardSubscriber {
       }
     }
     shardEventsSubscriber.cancel();
+    try {
+      asyncClientProxy.close();
+    } catch (Exception e) {
+      LOG.warn("Failed while closing client: ", e);
+    }
     return false;
   }
 

@@ -29,7 +29,7 @@ class RecordsBufferImpl implements RecordsBuffer {
 
   private final int maxCapacity = 20_000;
   private final long offerTimeoutMs = 5_000L;
-  private final long pollTimeoutMs = 5_000L;
+  private final long pollTimeoutMs = 1_000L;
   private final ShardSubscribersPoolState state;
   private final BlockingQueue<Record> queue;
 
