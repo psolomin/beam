@@ -17,7 +17,6 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
@@ -30,6 +29,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.signals.ConsumerError;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.signals.RecoverableConsumerError;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.signals.ShardEventWrapper;
@@ -46,21 +46,27 @@ class ShardSubscriberImpl implements ShardSubscriber {
   private static final Logger LOG = LoggerFactory.getLogger(ShardSubscriberImpl.class);
   private final String shardId;
   private final Config config;
-  private final ClientBuilder clientBuilder;
   private final ShardCheckpoint startCheckpoint;
   private final BlockingQueue<ShardEventWrapper> shardEventsBuffer = new LinkedBlockingQueue<>(2);
   private final AtomicBoolean isRunning = new AtomicBoolean(false);
+  private final RecordsBuffer recordsBuffer;
+  private final AsyncClientProxy asyncClientProxy;
 
   private final long startTimeoutMs = 10_000L;
   private final long bufferPollTimeoutMs = 7_000L;
 
   ShardSubscriberImpl(
-      Config config, String shardId, ClientBuilder clientBuilder, ShardCheckpoint startCheckpoint) {
+      Config config,
+      String shardId,
+      ClientBuilder clientBuilder,
+      ShardCheckpoint startCheckpoint,
+      RecordsBuffer recordsBuffer) {
     this.config = config;
     this.shardId = shardId;
-    this.clientBuilder = clientBuilder;
     this.startCheckpoint = startCheckpoint;
+    this.recordsBuffer = recordsBuffer;
     this.isRunning.set(true);
+    this.asyncClientProxy = clientBuilder.build();
   }
 
   @Override
@@ -127,7 +133,6 @@ class ShardSubscriberImpl implements ShardSubscriber {
             .subscriber(() -> shardEventsSubscriber)
             .build();
 
-    AsyncClientProxy asyncClientProxy = clientBuilder.build();
     CompletableFuture<Void> f = asyncClientProxy.subscribeToShard(request, responseHandler);
     boolean subscriptionWasEstablished =
         eventsHandlerReadyLatch.await(startTimeoutMs, TimeUnit.MILLISECONDS);
@@ -234,15 +239,21 @@ class ShardSubscriberImpl implements ShardSubscriber {
   }
 
   private void consume(SubscribeToShardEvent event) {
-    List<KinesisClientRecord> clientRecords;
     if (!event.records().isEmpty()) {
-      clientRecords =
+      List<KinesisClientRecord> clientRecords =
           new AggregatorUtil()
               .deaggregate(
                   event.records().stream()
                       .map(KinesisClientRecord::fromRecord)
                       .collect(Collectors.toList()));
-    } else clientRecords = Collections.emptyList();
-    LOG.info("Received records {}", clientRecords);
+
+      // TODO: check for return value when pushing
+      clientRecords.forEach(
+          r ->
+              recordsBuffer.push(
+                  Record.record(shardId, new KinesisRecord(r, config.getStreamName(), shardId))));
+    } else {
+      recordsBuffer.push(Record.checkPointOnly(shardId, event.continuationSequenceNumber()));
+    }
   }
 }

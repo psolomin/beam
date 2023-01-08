@@ -29,6 +29,7 @@ class RecordsBufferImpl implements RecordsBuffer {
   private static final Logger LOG = LoggerFactory.getLogger(RecordsBufferImpl.class);
 
   private final int maxCapacity = 20_000;
+  private final long offerTimeoutMs = 5_000L;
   private final long pollTimeoutMs = 5_000L;
   private final RecordsBufferState state;
   private final BlockingQueue<Record> queue;
@@ -40,7 +41,12 @@ class RecordsBufferImpl implements RecordsBuffer {
 
   @Override
   public boolean push(Record record) {
-    return false;
+    try {
+      return queue.offer(record, offerTimeoutMs, TimeUnit.MILLISECONDS);
+    } catch (InterruptedException e) {
+      LOG.warn("Interrupted while offering record");
+      return false;
+    }
   }
 
   @Override

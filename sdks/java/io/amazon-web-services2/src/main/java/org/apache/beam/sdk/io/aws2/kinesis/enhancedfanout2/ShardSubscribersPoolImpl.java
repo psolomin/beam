@@ -159,7 +159,11 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
             shardCheckpoint -> {
               ShardSubscriber s =
                   new ShardSubscriberImpl(
-                      config, shardCheckpoint.getShardId(), clientBuilder, shardCheckpoint);
+                      config,
+                      shardCheckpoint.getShardId(),
+                      clientBuilder,
+                      shardCheckpoint,
+                      recordsBuffer);
               shardSubscribers.put(shardCheckpoint.getShardId(), s);
               executorService.submit(s);
             });
