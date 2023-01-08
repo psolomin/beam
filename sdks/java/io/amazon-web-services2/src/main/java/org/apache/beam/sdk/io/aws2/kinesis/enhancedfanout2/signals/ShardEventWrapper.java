@@ -51,7 +51,7 @@ public class ShardEventWrapper {
     return new ShardEventWrapper(ShardEventType.ERROR, Optional.empty(), Optional.of(err));
   }
 
-  ShardEventType type() {
+  public ShardEventType type() {
     return type;
   }
 

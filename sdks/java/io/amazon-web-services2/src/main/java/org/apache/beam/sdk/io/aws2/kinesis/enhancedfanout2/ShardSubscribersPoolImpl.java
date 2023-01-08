@@ -157,7 +157,9 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
         .iterator()
         .forEachRemaining(
             shardCheckpoint -> {
-              ShardSubscriber s = new ShardSubscriberImpl(config, shardCheckpoint.getShardId());
+              ShardSubscriber s =
+                  new ShardSubscriberImpl(
+                      config, shardCheckpoint.getShardId(), clientBuilder, shardCheckpoint);
               shardSubscribers.put(shardCheckpoint.getShardId(), s);
               executorService.submit(s);
             });
