@@ -22,10 +22,10 @@ import java.util.concurrent.ConcurrentMap;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableMap;
 import org.joda.time.Instant;
 
-class RecordsBufferStateImpl implements RecordsBufferState {
+class ShardSubscribersPoolStateImpl implements ShardSubscribersPoolState {
   private final ConcurrentMap<String, ShardCheckpoint> shardsCheckpointsMap;
 
-  RecordsBufferStateImpl(KinesisReaderCheckpoint initialCheckpoint) {
+  ShardSubscribersPoolStateImpl(KinesisReaderCheckpoint initialCheckpoint) {
     ImmutableMap.Builder<String, ShardCheckpoint> b = ImmutableMap.builder();
     for (ShardCheckpoint shardCheckpoint : initialCheckpoint) {
       b.put(shardCheckpoint.getShardId(), shardCheckpoint);

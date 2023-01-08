@@ -19,7 +19,7 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
 import org.joda.time.Instant;
 
-interface RecordsBufferState {
+interface ShardSubscribersPoolState {
   void ackRecord(Record record);
 
   ShardCheckpoint getCheckpoint(String shardId);

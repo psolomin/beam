@@ -18,17 +18,9 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
-import org.joda.time.Instant;
 
 interface RecordsBuffer {
   boolean push(Record record);
 
   CustomOptional<Record> fetchOne();
-
-  ShardCheckpoint getCheckpoint(String shardId);
-
-  // Beam-specific methods
-  Instant getWatermark();
-
-  KinesisReaderCheckpoint getCheckpointMark();
 }

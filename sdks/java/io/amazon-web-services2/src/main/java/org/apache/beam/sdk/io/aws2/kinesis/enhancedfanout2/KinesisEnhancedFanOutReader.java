@@ -119,8 +119,10 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
 
   private ShardSubscribersPool createPool() throws TransientKinesisException {
     KinesisReaderCheckpoint initialCheckpoint = checkpointGenerator.generate(clientBuilder);
-    RecordsBufferState recordsBufferState = new RecordsBufferStateImpl(initialCheckpoint);
-    RecordsBuffer recordsBuffer = new RecordsBufferImpl(recordsBufferState);
-    return new ShardSubscribersPoolImpl(config, clientBuilder, recordsBuffer);
+    ShardSubscribersPoolState shardSubscribersPoolState =
+        new ShardSubscribersPoolStateImpl(initialCheckpoint);
+    RecordsBuffer recordsBuffer = new RecordsBufferImpl(shardSubscribersPoolState);
+    return new ShardSubscribersPoolImpl(
+        config, clientBuilder, shardSubscribersPoolState, recordsBuffer);
   }
 }
