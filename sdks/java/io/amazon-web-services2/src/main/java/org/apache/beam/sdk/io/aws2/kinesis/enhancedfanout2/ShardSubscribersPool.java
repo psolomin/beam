@@ -19,12 +19,17 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.signals.ShardEventWrapper;
 import org.joda.time.Instant;
 
 interface ShardSubscribersPool {
   boolean start();
 
   boolean stop();
+
+  boolean isRunning();
+
+  void handleShardError(String shardId, ShardEventWrapper event);
 
   CustomOptional<KinesisRecord> nextRecord();
 

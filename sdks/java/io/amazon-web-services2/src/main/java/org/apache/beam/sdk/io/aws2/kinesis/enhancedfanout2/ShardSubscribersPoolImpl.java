@@ -32,6 +32,7 @@ import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.signals.CriticalErrorSignal;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.signals.ReShardSignal;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.signals.ShardEventWrapper;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.signals.ShardSubscriberSignal;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.joda.time.Instant;
@@ -93,6 +94,27 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
   public boolean stop() {
     initiateGracefulShutdown();
     return awaitTermination();
+  }
+
+  @Override
+  public boolean isRunning() {
+    return isRunning.get();
+  }
+
+  @Override
+  public void handleShardError(String shardId, ShardEventWrapper event) {
+    LOG.info("Error event from {}.", shardId, event.getError());
+    try {
+      CriticalErrorSignal signal = CriticalErrorSignal.fromError(shardId, event);
+      if (!signals.offer(signal, signalsOfferTimeoutMs, TimeUnit.MILLISECONDS)) {
+        LOG.warn(
+            "Error event from {} was not pushed to the queue, timeout after {}ms",
+            shardId,
+            signalsOfferTimeoutMs);
+      }
+    } catch (InterruptedException e) {
+      LOG.warn("Error event from {} was not pushed to the queue.", shardId, e);
+    }
   }
 
   @Override
@@ -164,7 +186,12 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
             shardCheckpoint -> {
               ShardSubscriber s =
                   new ShardSubscriberImpl(
-                      config, shardCheckpoint.getShardId(), clientBuilder, state, recordsBuffer);
+                      config,
+                      shardCheckpoint.getShardId(),
+                      clientBuilder,
+                      this,
+                      state,
+                      recordsBuffer);
               shardSubscribers.put(shardCheckpoint.getShardId(), s);
               executorService.submit(s);
             });

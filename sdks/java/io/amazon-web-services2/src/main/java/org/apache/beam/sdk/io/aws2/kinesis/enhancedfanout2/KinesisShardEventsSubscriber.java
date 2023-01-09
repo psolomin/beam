@@ -77,9 +77,7 @@ class KinesisShardEventsSubscriber implements Subscriber<SubscribeToShardEventSt
 
   @Override
   public void onError(Throwable throwable) {
-    if (queue.isEmpty()) {
-      enqueueEvent(ShardEventWrapper.error(throwable));
-    }
+    enqueueEvent(ShardEventWrapper.error(throwable));
     cancel();
   }
 
@@ -121,8 +119,7 @@ class KinesisShardEventsSubscriber implements Subscriber<SubscribeToShardEventSt
         LOG.error(template, streamName, consumerArn, shardId, enqueueTimeoutMs);
       }
     } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new RuntimeException(e);
+      LOG.error("Interrupted while trying to enqueue event");
     }
   }
 }
