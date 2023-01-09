@@ -48,6 +48,7 @@ class ShardSubscriberImpl implements ShardSubscriber {
   private final Config config;
   private final BlockingQueue<ShardEventWrapper> shardEventsBuffer = new LinkedBlockingQueue<>(2);
   private final AtomicBoolean isRunning = new AtomicBoolean(false);
+  private final ShardSubscribersPool pool;
   private final ShardSubscribersPoolState state;
   private final RecordsBuffer recordsBuffer;
   private final AsyncClientProxy asyncClientProxy;
@@ -62,11 +63,13 @@ class ShardSubscriberImpl implements ShardSubscriber {
       Config config,
       String shardId,
       ClientBuilder clientBuilder,
+      ShardSubscribersPool pool,
       ShardSubscribersPoolState initialState,
       RecordsBuffer recordsBuffer) {
     this.config = config;
     this.shardId = shardId;
     this.state = initialState;
+    this.pool = pool;
     this.recordsBuffer = recordsBuffer;
     this.isRunning.set(true);
     this.asyncClientProxy = clientBuilder.build();
@@ -85,6 +88,12 @@ class ShardSubscriberImpl implements ShardSubscriber {
             config.getStreamName(),
             shardId);
       }
+    }
+
+    try {
+      asyncClientProxy.close();
+    } catch (Exception e) {
+      LOG.warn("Failed while closing client: ", e);
     }
   }
 
@@ -173,10 +182,12 @@ class ShardSubscriberImpl implements ShardSubscriber {
         case SUBSCRIPTION_COMPLETE:
           {
             LOG.info("Shard {} - subscription complete", shardId);
+            shardEventsSubscriber.cancel();
             return true;
           }
         case ERROR:
           {
+            shardEventsSubscriber.cancel();
             if (maybeRecoverableError(event)) return true;
             else {
               handleCriticalError(event);
@@ -193,6 +204,7 @@ class ShardSubscriberImpl implements ShardSubscriber {
         case RE_SHARD:
           {
             handleReShard(event);
+            shardEventsSubscriber.cancel();
             return false;
           }
         default:
@@ -203,11 +215,6 @@ class ShardSubscriberImpl implements ShardSubscriber {
       }
     }
     shardEventsSubscriber.cancel();
-    try {
-      asyncClientProxy.close();
-    } catch (Exception e) {
-      LOG.warn("Failed while closing client: ", e);
-    }
     return false;
   }
 
@@ -215,7 +222,9 @@ class ShardSubscriberImpl implements ShardSubscriber {
     isRunning.set(false);
   }
 
-  void handleCriticalError(ShardEventWrapper event) {}
+  void handleCriticalError(ShardEventWrapper event) {
+    pool.handleShardError(shardId, event);
+  }
 
   private boolean maybeRecoverableError(ShardEventWrapper event) {
     Throwable error = event.getError();
