@@ -53,12 +53,6 @@ class ShardSubscriberImpl implements ShardSubscriber {
   private final RecordsBuffer recordsBuffer;
   private final AsyncClientProxy asyncClientProxy;
 
-  private final long startTimeoutMs = 10_000L;
-
-  // If network is OK, but the shard has no records, it will still receive
-  // empty-msg every ~ 5 seconds which we should use for checkpointing.
-  private final long bufferPollTimeoutMs = 7_000L;
-
   ShardSubscriberImpl(
       Config config,
       String shardId,
@@ -148,7 +142,7 @@ class ShardSubscriberImpl implements ShardSubscriber {
 
     CompletableFuture<Void> f = asyncClientProxy.subscribeToShard(request, responseHandler);
     boolean subscriptionWasEstablished =
-        eventsHandlerReadyLatch.await(startTimeoutMs, TimeUnit.MILLISECONDS);
+        eventsHandlerReadyLatch.await(config.getPoolStartTimeoutMs(), TimeUnit.MILLISECONDS);
 
     if (!subscriptionWasEstablished) {
       LOG.error("Subscribe request {} failed.", subscribeRequestId);
@@ -170,10 +164,12 @@ class ShardSubscriberImpl implements ShardSubscriber {
       KinesisShardEventsSubscriber shardEventsSubscriber)
       throws InterruptedException {
     while (isRunning.get()) {
-      ShardEventWrapper event = shardEventsBuffer.poll(bufferPollTimeoutMs, TimeUnit.MILLISECONDS);
+      ShardEventWrapper event =
+          shardEventsBuffer.poll(
+              config.getShardSubscriberBufferPollTimeoutMs(), TimeUnit.MILLISECONDS);
 
       if (event == null) {
-        LOG.warn("No records available after {}", bufferPollTimeoutMs);
+        LOG.warn("No records available after {}", config.getShardSubscriberBufferPollTimeoutMs());
         break;
       }
 

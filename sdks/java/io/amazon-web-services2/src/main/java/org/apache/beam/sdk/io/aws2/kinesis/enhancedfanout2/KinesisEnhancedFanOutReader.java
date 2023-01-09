@@ -121,7 +121,7 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
     KinesisReaderCheckpoint initialCheckpoint = checkpointGenerator.generate(clientBuilder);
     ShardSubscribersPoolState shardSubscribersPoolState =
         new ShardSubscribersPoolStateImpl(initialCheckpoint);
-    RecordsBuffer recordsBuffer = new RecordsBufferImpl(shardSubscribersPoolState);
+    RecordsBuffer recordsBuffer = new RecordsBufferImpl(config, shardSubscribersPoolState);
     return new ShardSubscribersPoolImpl(
         config, clientBuilder, shardSubscribersPoolState, recordsBuffer);
   }
