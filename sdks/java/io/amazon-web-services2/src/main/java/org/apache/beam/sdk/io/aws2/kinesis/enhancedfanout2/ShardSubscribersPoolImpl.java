@@ -44,17 +44,10 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
   private static final Logger LOG = LoggerFactory.getLogger(ShardSubscribersPoolImpl.class);
   private static final String LOG_MSG_TEMPLATE = "Stream = {} consumer = {}";
 
-  private static final long startTimeoutMs = 10_000;
-  private static final long signalsOfferTimeoutMs = 1_000L;
-  private static final long signalsPollTimeoutMs = 10_000L;
-  private static final long awaitTerminationTimeoutMs = 30_000;
-  private static final int signalsQueueCapacity = 1000;
-
   private final Config config;
   private final ClientBuilder clientBuilder;
   private final ExecutorService executorService;
-  private final BlockingQueue<ShardSubscriberSignal> signals =
-      new LinkedBlockingQueue<>(signalsQueueCapacity);
+  private final BlockingQueue<ShardSubscriberSignal> signals;
   private final AtomicBoolean isRunning = new AtomicBoolean(false);
   private final CountDownLatch consumerStartedLatch;
   private final RecordsBuffer recordsBuffer;
@@ -72,6 +65,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
     this.executorService = createThreadPool(config);
     this.state = initialState;
     this.consumerStartedLatch = new CountDownLatch(1);
+    this.signals = new LinkedBlockingQueue<>(config.getPoolSignalsQueueCapacity());
   }
 
   @Override
@@ -83,8 +77,11 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
     t.setDaemon(true);
     t.start();
     try {
-      if (consumerStartedLatch.await(startTimeoutMs, TimeUnit.MILLISECONDS)) return true;
-      else throw new RuntimeException(String.format("Did not start within %s ms", startTimeoutMs));
+      if (consumerStartedLatch.await(config.getPoolStartTimeoutMs(), TimeUnit.MILLISECONDS))
+        return true;
+      else
+        throw new RuntimeException(
+            String.format("Did not start within %s ms", config.getPoolStartTimeoutMs()));
     } catch (InterruptedException e) {
       throw new RuntimeException("Interrupted while waiting to start");
     }
@@ -106,11 +103,11 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
     LOG.info("Error event from {}.", shardId, event.getError());
     try {
       CriticalErrorSignal signal = CriticalErrorSignal.fromError(shardId, event);
-      if (!signals.offer(signal, signalsOfferTimeoutMs, TimeUnit.MILLISECONDS)) {
+      if (!signals.offer(signal, config.getPoolSignalsOfferTimeoutMs(), TimeUnit.MILLISECONDS)) {
         LOG.warn(
             "Error event from {} was not pushed to the queue, timeout after {}ms",
             shardId,
-            signalsOfferTimeoutMs);
+            config.getPoolSignalsOfferTimeoutMs());
       }
     } catch (InterruptedException e) {
       LOG.warn("Error event from {} was not pushed to the queue.", shardId, e);
@@ -163,7 +160,8 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
 
     while (isRunning.get()) {
       try {
-        ShardSubscriberSignal signal = signals.poll(signalsPollTimeoutMs, TimeUnit.MILLISECONDS);
+        ShardSubscriberSignal signal =
+            signals.poll(config.getPoolSignalsPollTimeoutMs(), TimeUnit.MILLISECONDS);
         if (signal != null) {
           if (signal instanceof ReShardSignal) processReShardSignal((ReShardSignal) signal);
           if (signal instanceof CriticalErrorSignal)
@@ -231,7 +229,8 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
   private boolean awaitTermination() {
     try {
       boolean isTerminated =
-          executorService.awaitTermination(awaitTerminationTimeoutMs, TimeUnit.MILLISECONDS);
+          executorService.awaitTermination(
+              config.getPoolAwaitTerminationTimeoutMs(), TimeUnit.MILLISECONDS);
       if (!isTerminated) {
         LOG.warn("Unable to gracefully shut down");
       }

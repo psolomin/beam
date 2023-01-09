@@ -17,7 +17,7 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
-import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.helpers.Helpers.createReadSpec;
+import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.helpers.Helpers.createConfig;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -25,7 +25,6 @@ import static org.junit.Assert.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
-import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.helpers.KinesisClientBuilderStub;
@@ -39,17 +38,16 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 public class ShardSubscribersPoolImplTest {
   @Test
   public void poolReadsRecords() throws TransientKinesisException {
-    KinesisIO.Read readSpec = createReadSpec();
-    Config config = Config.fromIOSpec(readSpec);
+    Config config = createConfig();
     KinesisClientBuilderStub clientBuilder =
         KinesisClientProxyStubBehaviours.twoShardsWithRecords();
     KinesisReaderCheckpoint initialCheckpoint =
         new FromScratchCheckpointGenerator(config).generate(clientBuilder);
     ShardSubscribersPoolState state = new ShardSubscribersPoolStateImpl(initialCheckpoint);
-    RecordsBuffer buffer = new RecordsBufferImpl(state);
+    RecordsBuffer buffer = new RecordsBufferImpl(config, state);
     ShardSubscribersPool pool = new ShardSubscribersPoolImpl(config, clientBuilder, state, buffer);
     assertTrue(pool.start());
-    List<KinesisRecord> actualRecords = waitForRecords(pool, 12 + 1);
+    List<KinesisRecord> actualRecords = waitForRecords(pool, 12);
     assertEquals(12, actualRecords.size());
     // 2 shards x (1 initial subscribe + 1 re-subscribe)
     assertEquals(6, clientBuilder.subscribeRequestsSeen().size());
@@ -68,17 +66,16 @@ public class ShardSubscribersPoolImplTest {
 
   @Test
   public void poolReadsRecordsAfterTransientError() throws TransientKinesisException {
-    KinesisIO.Read readSpec = createReadSpec();
-    Config config = Config.fromIOSpec(readSpec);
+    Config config = createConfig();
     KinesisClientBuilderStub clientBuilder =
         KinesisClientProxyStubBehaviours.twoShardsWithRecordsOneShardRecoverableError();
     KinesisReaderCheckpoint initialCheckpoint =
         new FromScratchCheckpointGenerator(config).generate(clientBuilder);
     ShardSubscribersPoolState state = new ShardSubscribersPoolStateImpl(initialCheckpoint);
-    RecordsBuffer buffer = new RecordsBufferImpl(state);
+    RecordsBuffer buffer = new RecordsBufferImpl(config, state);
     ShardSubscribersPool pool = new ShardSubscribersPoolImpl(config, clientBuilder, state, buffer);
     assertTrue(pool.start());
-    List<KinesisRecord> actualRecords = waitForRecords(pool, 20 + 1);
+    List<KinesisRecord> actualRecords = waitForRecords(pool, 20);
     assertEquals(20, actualRecords.size());
     // 2 shards, 2 initial subscribes, 2
     assertEquals(6, clientBuilder.subscribeRequestsSeen().size());
@@ -97,18 +94,17 @@ public class ShardSubscribersPoolImplTest {
 
   @Test
   public void poolStopsUponUnRecoverableError() throws TransientKinesisException {
-    KinesisIO.Read readSpec = createReadSpec();
-    Config config = Config.fromIOSpec(readSpec);
+    Config config = createConfig();
     KinesisClientBuilderStub clientBuilder =
         KinesisClientProxyStubBehaviours.twoShardsWithRecordsOneShardError();
     KinesisReaderCheckpoint initialCheckpoint =
         new FromScratchCheckpointGenerator(config).generate(clientBuilder);
     ShardSubscribersPoolState state = new ShardSubscribersPoolStateImpl(initialCheckpoint);
-    RecordsBuffer buffer = new RecordsBufferImpl(state);
+    RecordsBuffer buffer = new RecordsBufferImpl(config, state);
     ShardSubscribersPool pool = new ShardSubscribersPoolImpl(config, clientBuilder, state, buffer);
     assertTrue(pool.start());
     // error in one shard will stop others, hence the final count is not deterministic
-    List<KinesisRecord> actualRecords = waitForRecords(pool, 15 + 1);
+    List<KinesisRecord> actualRecords = waitForRecords(pool, 15);
     assertTrue(actualRecords.size() <= 15);
     // 2 shards - (2 initial subscribes + 1 re-subscribe)
     assertEquals(3, clientBuilder.subscribeRequestsSeen().size());
@@ -126,7 +122,7 @@ public class ShardSubscribersPoolImplTest {
     List<KinesisRecord> records = new ArrayList<>();
     int maxAttempts = expectedCnt * 3;
     int i = 0;
-    while (i < maxAttempts && records.size() < expectedCnt) {
+    while (i < maxAttempts) {
       CustomOptional<KinesisRecord> r = pool.nextRecord();
       if (r.isPresent()) records.add(r.get());
       i++;

@@ -27,21 +27,20 @@ import org.slf4j.LoggerFactory;
 class RecordsBufferImpl implements RecordsBuffer {
   private static final Logger LOG = LoggerFactory.getLogger(RecordsBufferImpl.class);
 
-  private final int maxCapacity = 20_000;
-  private final long offerTimeoutMs = 5_000L;
-  private final long pollTimeoutMs = 1_000L;
+  private final Config config;
   private final ShardSubscribersPoolState state;
   private final BlockingQueue<Record> queue;
 
-  RecordsBufferImpl(ShardSubscribersPoolState state) {
+  RecordsBufferImpl(Config config, ShardSubscribersPoolState state) {
+    this.config = config;
     this.state = state;
-    this.queue = new LinkedBlockingQueue<>(maxCapacity);
+    this.queue = new LinkedBlockingQueue<>(config.getRecordsBufferMaxCapacity());
   }
 
   @Override
   public boolean push(Record record) {
     try {
-      return queue.offer(record, offerTimeoutMs, TimeUnit.MILLISECONDS);
+      return queue.offer(record, config.getRecordsBufferOfferTimeoutMs(), TimeUnit.MILLISECONDS);
     } catch (InterruptedException e) {
       LOG.warn("Interrupted while offering record");
       return false;
@@ -51,7 +50,8 @@ class RecordsBufferImpl implements RecordsBuffer {
   @Override
   public CustomOptional<Record> fetchOne() {
     try {
-      Record recordOrNull = queue.poll(pollTimeoutMs, TimeUnit.MILLISECONDS);
+      Record recordOrNull =
+          queue.poll(config.getRecordsBufferPollTimeoutMs(), TimeUnit.MILLISECONDS);
       if (recordOrNull != null) {
         state.ackRecord(recordOrNull);
         return CustomOptional.of(recordOrNull);

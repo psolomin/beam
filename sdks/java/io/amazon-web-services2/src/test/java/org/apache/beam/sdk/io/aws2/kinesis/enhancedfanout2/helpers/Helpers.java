@@ -18,6 +18,9 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.helpers;
 
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
+import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.Config;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import software.amazon.kinesis.common.InitialPositionInStream;
 
 public class Helpers {
@@ -26,5 +29,18 @@ public class Helpers {
         .withStreamName("stream-01")
         .withConsumerArn("consumer-01")
         .withInitialPositionInStream(InitialPositionInStream.LATEST);
+  }
+
+  public static Config createConfig() {
+    return new Config(
+        "stream-01",
+        "consumer-01",
+        new StartingPoint(InitialPositionInStream.LATEST),
+        Optional.absent(),
+        500L,
+        50L,
+        100,
+        5_000L,
+        50L);
   }
 }
