@@ -17,9 +17,20 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
+import org.apache.beam.sdk.io.aws2.common.ClientBuilderFactory;
+import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
+
 class ClientBuilderImpl implements ClientBuilder {
+  private final ClientBuilderFactory builderFactory;
+  private final KinesisIO.Read readSpec;
+
+  ClientBuilderImpl(ClientBuilderFactory builderFactory, KinesisIO.Read readSpec) {
+    this.builderFactory = builderFactory;
+    this.readSpec = readSpec;
+  }
+
   @Override
   public AsyncClientProxy build() {
-    return new AsyncClientProxyImpl();
+    return new AsyncClientProxyImpl(builderFactory, readSpec);
   }
 }

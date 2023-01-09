@@ -17,14 +17,9 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
-import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
-import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
-import software.amazon.awssdk.core.retry.RetryPolicy;
-import software.amazon.awssdk.core.retry.backoff.BackoffStrategy;
-import software.amazon.awssdk.core.retry.conditions.RetryCondition;
-import software.amazon.awssdk.http.async.SdkAsyncHttpClient.Builder;
-import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
+import org.apache.beam.sdk.io.aws2.common.ClientBuilderFactory;
+import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
@@ -34,33 +29,13 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHan
 public class AsyncClientProxyImpl implements AsyncClientProxy {
   private final KinesisAsyncClient client;
 
-  public AsyncClientProxyImpl() {
-    RetryPolicy retryPolicy =
-        RetryPolicy.builder()
-            .backoffStrategy(BackoffStrategy.defaultStrategy())
-            .throttlingBackoffStrategy(BackoffStrategy.defaultThrottlingStrategy())
-            .retryCondition(RetryCondition.defaultRetryCondition())
-            .numRetries(10)
-            .build();
-
-    ClientOverrideConfiguration conf =
-        ClientOverrideConfiguration.builder()
-            .retryPolicy(retryPolicy)
-            .apiCallTimeout(Duration.ofMinutes(6)) // must be > 5 minutes
-            .build();
-
-    Builder<NettyNioAsyncHttpClient.Builder> customHttpBuilder =
-        NettyNioAsyncHttpClient.builder()
-            .connectionMaxIdleTime(Duration.ofSeconds(180))
-            .connectionAcquisitionTimeout(Duration.ofSeconds(60))
-            .connectionTimeout(Duration.ofSeconds(120))
-            .maxConcurrency(20)
-            .maxPendingConnectionAcquires(120);
-
+  public AsyncClientProxyImpl(ClientBuilderFactory builderFactory, KinesisIO.Read readSpec) {
     client =
-        KinesisAsyncClient.builder()
-            .httpClientBuilder(customHttpBuilder)
-            .overrideConfiguration(conf)
+        builderFactory
+            .create(
+                KinesisAsyncClient.builder(),
+                Checkers.checkNotNull(readSpec.getClientConfiguration(), "clientConfiguration"),
+                null) // builderFactory already created with AwsOptions
             .build();
   }
 
