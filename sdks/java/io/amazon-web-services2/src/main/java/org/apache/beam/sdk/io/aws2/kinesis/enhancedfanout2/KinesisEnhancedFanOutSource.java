@@ -25,6 +25,7 @@ import java.util.List;
 import org.apache.beam.sdk.coders.Coder;
 import org.apache.beam.sdk.coders.SerializableCoder;
 import org.apache.beam.sdk.io.UnboundedSource;
+import org.apache.beam.sdk.io.aws2.common.ClientBuilderFactory;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecordCoder;
@@ -36,26 +37,31 @@ public class KinesisEnhancedFanOutSource
 
   private final KinesisIO.Read readSpec;
   private final CheckpointGenerator checkpointGenerator;
+  private final ClientBuilderFactory builderFactory;
 
-  public KinesisEnhancedFanOutSource(KinesisIO.Read readSpec) {
-    this(readSpec, new FromScratchCheckpointGenerator(Config.fromIOSpec(readSpec)));
+  public KinesisEnhancedFanOutSource(KinesisIO.Read readSpec, ClientBuilderFactory builderFactory) {
+    this(readSpec, builderFactory, new FromScratchCheckpointGenerator(Config.fromIOSpec(readSpec)));
   }
 
   private KinesisEnhancedFanOutSource(
-      KinesisIO.Read readSpec, CheckpointGenerator initialCheckpoint) {
+      KinesisIO.Read readSpec,
+      ClientBuilderFactory builderFactory,
+      CheckpointGenerator initialCheckpoint) {
     this.readSpec = checkNotNull(readSpec, "spec");
+    this.builderFactory = builderFactory;
     this.checkpointGenerator = checkNotNull(initialCheckpoint, "initialCheckpoint");
   }
 
   @Override
   public List<KinesisEnhancedFanOutSource> split(int desiredNumSplits, PipelineOptions options)
       throws Exception {
-    ClientBuilder clientBuilder = new ClientBuilderImpl();
+    ClientBuilder clientBuilder = new ClientBuilderImpl(builderFactory, readSpec);
     KinesisReaderCheckpoint checkpoint = checkpointGenerator.generate(clientBuilder);
     List<KinesisEnhancedFanOutSource> sources = newArrayList();
     for (KinesisReaderCheckpoint partition : checkpoint.splitInto(desiredNumSplits)) {
       sources.add(
-          new KinesisEnhancedFanOutSource(readSpec, new StaticCheckpointGenerator(partition)));
+          new KinesisEnhancedFanOutSource(
+              readSpec, builderFactory, new StaticCheckpointGenerator(partition)));
     }
     return sources;
   }
@@ -69,8 +75,8 @@ public class KinesisEnhancedFanOutSource
       checkpointGenerator = new StaticCheckpointGenerator(checkpointMark);
     }
 
-    ClientBuilder builder = new ClientBuilderImpl();
-    KinesisEnhancedFanOutSource source = new KinesisEnhancedFanOutSource(readSpec);
+    ClientBuilder builder = new ClientBuilderImpl(builderFactory, readSpec);
+    KinesisEnhancedFanOutSource source = new KinesisEnhancedFanOutSource(readSpec, builderFactory);
     return new KinesisEnhancedFanOutReader(readSpec, builder, checkpointGenerator, source);
   }
 

@@ -21,6 +21,7 @@ import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.helpers.Helper
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import org.apache.beam.sdk.io.aws2.common.ClientBuilderFactory;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.helpers.KinesisClientProxyStubBehaviours;
 import org.junit.Test;
@@ -32,7 +33,8 @@ public class KinesisEnhancedFanOutReaderTest {
     ClientBuilder clientBuilder = KinesisClientProxyStubBehaviours.twoShardsWithRecords();
     CheckpointGenerator checkpointGenerator =
         new FromScratchCheckpointGenerator(Config.fromIOSpec(readSpec));
-    KinesisEnhancedFanOutSource source = new KinesisEnhancedFanOutSource(readSpec);
+    KinesisEnhancedFanOutSource source =
+        new KinesisEnhancedFanOutSource(readSpec, ClientBuilderFactory.defaultFactory());
     KinesisEnhancedFanOutReader reader =
         new KinesisEnhancedFanOutReader(readSpec, clientBuilder, checkpointGenerator, source);
 
