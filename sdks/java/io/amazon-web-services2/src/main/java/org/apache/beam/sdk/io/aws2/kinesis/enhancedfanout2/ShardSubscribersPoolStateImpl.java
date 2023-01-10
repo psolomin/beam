@@ -113,7 +113,7 @@ class ShardSubscribersPoolStateImpl implements ShardSubscribersPoolState {
    * This is called by Beam threads, but it's assumed not to be called upon each record fetched from
    * the buffer -> fine not to pre-compute it and compute on-demand
    *
-   * FIXME: add real implementation
+   * <p>FIXME: add real implementation
    *
    * @return greatest timestamp among all ack-ed so far
    */
