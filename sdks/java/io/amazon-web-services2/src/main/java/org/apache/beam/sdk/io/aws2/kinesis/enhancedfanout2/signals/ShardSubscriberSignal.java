@@ -17,4 +17,6 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.signals;
 
-public interface ShardSubscriberSignal {}
+public interface ShardSubscriberSignal {
+  String getSenderId();
+}

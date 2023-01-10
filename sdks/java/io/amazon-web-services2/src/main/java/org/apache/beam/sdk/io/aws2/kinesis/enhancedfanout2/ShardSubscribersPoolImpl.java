@@ -17,6 +17,8 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
+import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.Checkers.checkNotNull;
+
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -99,19 +101,17 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
   }
 
   @Override
-  public void handleShardError(String shardId, ShardEventWrapper event) {
-    LOG.info("Error event from {}.", shardId, event.getError());
-    try {
-      CriticalErrorSignal signal = CriticalErrorSignal.fromError(shardId, event);
-      if (!signals.offer(signal, config.getPoolSignalsOfferTimeoutMs(), TimeUnit.MILLISECONDS)) {
-        LOG.warn(
-            "Error event from {} was not pushed to the queue, timeout after {}ms",
-            shardId,
-            config.getPoolSignalsOfferTimeoutMs());
-      }
-    } catch (InterruptedException e) {
-      LOG.warn("Error event from {} was not pushed to the queue.", shardId, e);
-    }
+  public void sendReShardSignal(String shardId, ShardEventWrapper event) {
+    LOG.info("Re-shard event from {}.", shardId);
+    ReShardSignal signal = ReShardSignal.fromShardEvent(shardId, event);
+    pushSignal(signal);
+  }
+
+  @Override
+  public void sendShardErrorSignal(String shardId, ShardEventWrapper event) {
+    LOG.warn("Error event from {}", shardId, event.getError());
+    CriticalErrorSignal signal = CriticalErrorSignal.fromError(shardId, event);
+    pushSignal(signal);
   }
 
   @Override
@@ -197,10 +197,19 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
 
   private void processReShardSignal(ReShardSignal reShardSignal) throws InterruptedException {
     LOG.info("Processing re-shard signal {}", reShardSignal);
+
+    checkNotNull(shardSubscribers.get(reShardSignal.getSenderId()), reShardSignal.getSenderId())
+        .stop();
+
+    shardSubscribers.remove(reShardSignal.getSenderId());
+    state.applyReShard(
+        reShardSignal.getSenderId(),
+        reShardSignal.getContinuationSequenceNumber(),
+        reShardSignal.getChildShards());
   }
 
   private void processCriticalError(CriticalErrorSignal criticalErrorSignal) {
-    LOG.error("Received unrecoverable error signal shard {}", criticalErrorSignal);
+    LOG.error("Processing unrecoverable error signal shard {}", criticalErrorSignal);
     initiateGracefulShutdown();
   }
 
@@ -243,5 +252,18 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
 
   void cleanUpResources() {
     shardSubscribers.forEach((k, v) -> v.stop());
+  }
+
+  private void pushSignal(ShardSubscriberSignal signal) {
+    try {
+      if (!signals.offer(signal, config.getPoolSignalsOfferTimeoutMs(), TimeUnit.MILLISECONDS)) {
+        LOG.warn(
+            "Error event from {} was not pushed to the queue, timeout after {}ms",
+            signal,
+            config.getPoolSignalsOfferTimeoutMs());
+      }
+    } catch (InterruptedException e) {
+      LOG.warn("Error event from {} was not pushed to the queue.", signal.getSenderId(), e);
+    }
   }
 }
