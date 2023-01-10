@@ -30,6 +30,7 @@ public class CriticalErrorSignal implements ShardSubscriberSignal {
     return new CriticalErrorSignal(senderId, event.getError());
   }
 
+  @Override
   public String getSenderId() {
     return senderId;
   }

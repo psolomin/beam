@@ -24,10 +24,10 @@ import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AT
 import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AT_TIMESTAMP;
 
 import java.io.Serializable;
-import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.apache.beam.sdk.io.aws2.kinesis.TimeUtil;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import org.joda.time.Instant;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.awssdk.services.kinesis.model.StartingPosition;
@@ -54,9 +54,10 @@ public class ShardCheckpoint implements Serializable {
   private final String shardId;
   private final ShardIteratorType shardIteratorType;
 
-  private final CustomOptional<String> continuationSequenceNumber;
-  private final CustomOptional<Long> subSequenceNumber;
-  private final CustomOptional<Instant> timestamp;
+  private final Optional<String> continuationSequenceNumber;
+  private final Optional<Long> subSequenceNumber;
+  private final Optional<Instant> timestamp;
+  private final boolean shardIsClosed;
 
   public ShardCheckpoint(
       String streamName, String consumerArn, String shardId, StartingPoint startingPoint) {
@@ -65,11 +66,12 @@ public class ShardCheckpoint implements Serializable {
         consumerArn,
         shardId,
         ShardIteratorType.fromValue(startingPoint.getPositionName()),
-        CustomOptional.absent(),
-        CustomOptional.absent(),
+        Optional.absent(),
+        Optional.absent(),
         startingPoint.getTimestamp() != null
-            ? CustomOptional.of(startingPoint.getTimestamp())
-            : CustomOptional.absent());
+            ? Optional.of(startingPoint.getTimestamp())
+            : Optional.absent(),
+        false);
   }
 
   private ShardCheckpoint(
@@ -77,26 +79,10 @@ public class ShardCheckpoint implements Serializable {
       String consumerArn,
       String shardId,
       ShardIteratorType shardIteratorType,
-      String continuationSequenceNumber,
-      Long subSequenceNumber) {
-    this(
-        streamName,
-        consumerArn,
-        shardId,
-        shardIteratorType,
-        CustomOptional.of(continuationSequenceNumber),
-        CustomOptional.of(subSequenceNumber),
-        CustomOptional.absent());
-  }
-
-  private ShardCheckpoint(
-      String streamName,
-      String consumerArn,
-      String shardId,
-      ShardIteratorType shardIteratorType,
-      CustomOptional<String> continuationSequenceNumber,
-      CustomOptional<Long> subSequenceNumber,
-      CustomOptional<Instant> timestamp) {
+      Optional<String> continuationSequenceNumber,
+      Optional<Long> subSequenceNumber,
+      Optional<Instant> timestamp,
+      boolean shardIsClosed) {
     this.shardIteratorType = checkNotNull(shardIteratorType, "shardIteratorType");
     this.streamName = checkNotNull(streamName, "streamName");
     this.consumerArn = checkNotNull(consumerArn, "consumerArn");
@@ -122,6 +108,7 @@ public class ShardCheckpoint implements Serializable {
     this.subSequenceNumber = subSequenceNumber;
     this.continuationSequenceNumber = continuationSequenceNumber;
     this.timestamp = timestamp;
+    this.shardIsClosed = shardIsClosed;
   }
 
   /**
@@ -178,13 +165,34 @@ public class ShardCheckpoint implements Serializable {
         consumerArn,
         shardId,
         AFTER_SEQUENCE_NUMBER,
-        continuationSequenceNumber,
-        record.getSubSequenceNumber());
+        Optional.of(continuationSequenceNumber),
+        Optional.of(record.getSubSequenceNumber()),
+        timestamp,
+        shardIsClosed);
   }
 
   public ShardCheckpoint moveAfter(String continuationSequenceNumber) {
     return new ShardCheckpoint(
-        streamName, consumerArn, shardId, AFTER_SEQUENCE_NUMBER, continuationSequenceNumber, 0L);
+        streamName,
+        consumerArn,
+        shardId,
+        AFTER_SEQUENCE_NUMBER,
+        Optional.of(continuationSequenceNumber),
+        Optional.of(0L),
+        timestamp,
+        shardIsClosed);
+  }
+
+  public ShardCheckpoint markClosed() {
+    return new ShardCheckpoint(
+        streamName,
+        consumerArn,
+        shardId,
+        shardIteratorType,
+        continuationSequenceNumber,
+        subSequenceNumber,
+        timestamp,
+        true);
   }
 
   public String getStreamName() {
@@ -197,5 +205,9 @@ public class ShardCheckpoint implements Serializable {
 
   public String getShardId() {
     return shardId;
+  }
+
+  public boolean shardIsClosed() {
+    return shardIsClosed;
   }
 }

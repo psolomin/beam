@@ -17,12 +17,16 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 
+import java.util.List;
 import org.joda.time.Instant;
+import software.amazon.awssdk.services.kinesis.model.ChildShard;
 
 interface ShardSubscribersPoolState {
   void ackRecord(Record record);
 
   ShardCheckpoint getCheckpoint(String shardId);
+
+  void applyReShard(String parentShardId, String lastSequenceNumber, List<ChildShard> childShards);
 
   // Beam-specific methods
   Instant getWatermark();

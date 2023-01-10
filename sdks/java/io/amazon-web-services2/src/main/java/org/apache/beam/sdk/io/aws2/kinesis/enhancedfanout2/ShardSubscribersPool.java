@@ -29,7 +29,9 @@ interface ShardSubscribersPool {
 
   boolean isRunning();
 
-  void handleShardError(String shardId, ShardEventWrapper event);
+  void sendReShardSignal(String shardId, ShardEventWrapper event);
+
+  void sendShardErrorSignal(String shardId, ShardEventWrapper event);
 
   CustomOptional<KinesisRecord> nextRecord();
 

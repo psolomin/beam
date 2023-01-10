@@ -199,6 +199,10 @@ class ShardSubscriberImpl implements ShardSubscriber {
           }
         case RE_SHARD:
           {
+            // We still need to push this event with null sequence number,
+            // such that, once it's ack-ed, we can drop shard from pool state
+            SubscribeToShardEvent subscribeToShardEvent = event.getWrappedEvent();
+            eventConsumer.accept(subscribeToShardEvent);
             handleReShard(event);
             shardEventsSubscriber.cancel();
             return false;
@@ -215,11 +219,11 @@ class ShardSubscriberImpl implements ShardSubscriber {
   }
 
   void handleReShard(ShardEventWrapper event) {
-    isRunning.set(false);
+    pool.sendReShardSignal(shardId, event);
   }
 
   void handleCriticalError(ShardEventWrapper event) {
-    pool.handleShardError(shardId, event);
+    pool.sendShardErrorSignal(shardId, event);
   }
 
   private boolean maybeRecoverableError(ShardEventWrapper event) {

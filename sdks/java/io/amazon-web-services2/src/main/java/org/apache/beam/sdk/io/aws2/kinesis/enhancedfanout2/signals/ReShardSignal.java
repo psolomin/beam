@@ -22,27 +22,37 @@ import software.amazon.awssdk.services.kinesis.model.ChildShard;
 
 public class ReShardSignal implements ShardSubscriberSignal {
   private final String senderId;
+  private final String continuationSequenceNumber;
   private final List<ChildShard> childShards;
 
-  ReShardSignal(String senderId, List<ChildShard> childShards) {
+  ReShardSignal(String senderId, String continuationSequenceNumber, List<ChildShard> childShards) {
     this.senderId = senderId;
+    this.continuationSequenceNumber = continuationSequenceNumber;
     this.childShards = childShards;
   }
 
   public static ReShardSignal fromShardEvent(String senderId, ShardEventWrapper event) {
-    return new ReShardSignal(senderId, event.getWrappedEvent().childShards());
+    return new ReShardSignal(
+        senderId,
+        event.getWrappedEvent().continuationSequenceNumber(),
+        event.getWrappedEvent().childShards());
   }
 
+  @Override
   public String getSenderId() {
     return senderId;
-  }
-
-  public List<ChildShard> getChildShards() {
-    return childShards;
   }
 
   @Override
   public String toString() {
     return "ReShardSignal{" + "senderId='" + senderId + '\'' + ", childShards=" + childShards + '}';
+  }
+
+  public String getContinuationSequenceNumber() {
+    return continuationSequenceNumber;
+  }
+
+  public List<ChildShard> getChildShards() {
+    return childShards;
   }
 }
