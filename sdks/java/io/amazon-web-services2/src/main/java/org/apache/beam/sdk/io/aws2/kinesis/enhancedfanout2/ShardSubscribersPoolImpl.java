@@ -41,7 +41,6 @@ import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@SuppressWarnings("unused")
 public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable {
   private static final Logger LOG = LoggerFactory.getLogger(ShardSubscribersPoolImpl.class);
   private static final String LOG_MSG_TEMPLATE = "Stream = {} consumer = {}";
@@ -197,6 +196,9 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
 
   @SuppressWarnings("FutureReturnValueIgnored")
   private void processReShardSignal(ReShardSignal reShardSignal) throws InterruptedException {
+    // FIXME: this still have issue for *shard-down case* - if child shards are
+    // seen on multiple nodes, multiple nodes will try to start reading from same
+    // child shard.
     LOG.info("Processing re-shard signal {}", reShardSignal);
 
     checkNotNull(shardSubscribers.get(reShardSignal.getSenderId()), reShardSignal.getSenderId())
@@ -209,7 +211,6 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
         .forEach(
             childShard -> {
               if (!shardSubscribers.containsKey(childShard.shardId())) {
-                ShardCheckpoint shardCheckpoint = state.getCheckpoint(childShard.shardId());
                 ShardSubscriber s =
                     new ShardSubscriberImpl(
                         config, childShard.shardId(), clientBuilder, this, state, recordsBuffer);
