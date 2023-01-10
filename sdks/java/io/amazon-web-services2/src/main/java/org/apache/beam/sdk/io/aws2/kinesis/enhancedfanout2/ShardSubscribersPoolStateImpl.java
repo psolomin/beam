@@ -20,18 +20,22 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableMap;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
+import software.amazon.kinesis.common.InitialPositionInStream;
 
 class ShardSubscribersPoolStateImpl implements ShardSubscribersPoolState {
   private static final Logger LOG = LoggerFactory.getLogger(ShardSubscribersPoolStateImpl.class);
 
+  private final Config config;
   private final ConcurrentMap<String, ShardCheckpoint> shardsCheckpointsMap;
 
-  ShardSubscribersPoolStateImpl(KinesisReaderCheckpoint initialCheckpoint) {
+  ShardSubscribersPoolStateImpl(Config config, KinesisReaderCheckpoint initialCheckpoint) {
+    this.config = config;
     ImmutableMap.Builder<String, ShardCheckpoint> b = ImmutableMap.builder();
     for (ShardCheckpoint shardCheckpoint : initialCheckpoint) {
       b.put(shardCheckpoint.getShardId(), shardCheckpoint);
@@ -89,14 +93,24 @@ class ShardSubscribersPoolStateImpl implements ShardSubscribersPoolState {
    * @param childShards carries data necessary for creating checkpoints for child shards
    */
   @Override
-  public void applyReShard(
-      String parentShardId, String lastSequenceNumber, List<ChildShard> childShards) {
+  public void applyReShard(String parentShardId, List<ChildShard> childShards) {
     shardsCheckpointsMap.computeIfPresent(parentShardId, (k, v) -> v.markClosed());
+    for (ChildShard childShard : childShards) {
+      ShardCheckpoint newCheckpoint =
+          new ShardCheckpoint(
+              config.getStreamName(),
+              config.getConsumerArn(),
+              childShard.shardId(),
+              new StartingPoint(InitialPositionInStream.TRIM_HORIZON));
+      shardsCheckpointsMap.putIfAbsent(childShard.shardId(), newCheckpoint);
+    }
   }
 
   /**
    * This is called by Beam threads, but it's assumed not to be called upon each record fetched from
    * the buffer -> fine not to pre-compute it and compute on-demand
+   *
+   * TODO: add real implementation
    *
    * @return greatest timestamp among all ack-ed so far
    */

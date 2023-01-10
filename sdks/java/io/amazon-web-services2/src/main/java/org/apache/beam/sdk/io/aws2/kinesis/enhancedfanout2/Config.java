@@ -26,6 +26,7 @@ import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import software.amazon.kinesis.common.InitialPositionInStream;
 
+/** This class is immutable */
 public class Config implements Serializable {
   private final String streamName;
   private final String consumerArn;
