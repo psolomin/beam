@@ -26,7 +26,7 @@ interface ShardSubscribersPoolState {
 
   ShardCheckpoint getCheckpoint(String shardId);
 
-  void applyReShard(String parentShardId, String lastSequenceNumber, List<ChildShard> childShards);
+  void applyReShard(String parentShardId, List<ChildShard> childShards);
 
   // Beam-specific methods
   Instant getWatermark();

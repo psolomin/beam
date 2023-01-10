@@ -195,6 +195,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
             });
   }
 
+  @SuppressWarnings("FutureReturnValueIgnored")
   private void processReShardSignal(ReShardSignal reShardSignal) throws InterruptedException {
     LOG.info("Processing re-shard signal {}", reShardSignal);
 
@@ -202,10 +203,20 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
         .stop();
 
     shardSubscribers.remove(reShardSignal.getSenderId());
-    state.applyReShard(
-        reShardSignal.getSenderId(),
-        reShardSignal.getContinuationSequenceNumber(),
-        reShardSignal.getChildShards());
+    state.applyReShard(reShardSignal.getSenderId(), reShardSignal.getChildShards());
+    reShardSignal
+        .getChildShards()
+        .forEach(
+            childShard -> {
+              if (!shardSubscribers.containsKey(childShard.shardId())) {
+                ShardCheckpoint shardCheckpoint = state.getCheckpoint(childShard.shardId());
+                ShardSubscriber s =
+                    new ShardSubscriberImpl(
+                        config, childShard.shardId(), clientBuilder, this, state, recordsBuffer);
+                shardSubscribers.put(childShard.shardId(), s);
+                executorService.submit(s);
+              }
+            });
   }
 
   private void processCriticalError(CriticalErrorSignal criticalErrorSignal) {
