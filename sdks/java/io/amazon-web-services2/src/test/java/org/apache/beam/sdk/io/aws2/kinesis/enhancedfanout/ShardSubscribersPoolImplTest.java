@@ -66,6 +66,7 @@ public class ShardSubscribersPoolImplTest {
 
   @Test
   public void poolReadsRecordsAfterTransientError() throws TransientKinesisException {
+    // FIXME: flaky test
     Config config = createConfig();
     KinesisClientBuilderStub clientBuilder =
         KinesisClientProxyStubBehaviours.twoShardsWithRecordsOneShardRecoverableError();
@@ -94,6 +95,7 @@ public class ShardSubscribersPoolImplTest {
 
   @Test
   public void poolStopsUponUnRecoverableError() throws TransientKinesisException {
+    // FIXME: flaky test
     Config config = createConfig();
     KinesisClientBuilderStub clientBuilder =
         KinesisClientProxyStubBehaviours.twoShardsWithRecordsOneShardError();
@@ -147,6 +149,7 @@ public class ShardSubscribersPoolImplTest {
 
   @Test
   public void poolHandlesShardDown() throws TransientKinesisException {
+    // FIXME: flaky test
     Config config = createConfig();
     KinesisClientBuilderStub clientBuilder =
         KinesisClientProxyStubBehaviours.fourShardsWithRecordsAndShardDown();
