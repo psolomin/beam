@@ -94,6 +94,9 @@ class ShardSubscribersPoolStateImpl implements ShardSubscribersPoolState {
    */
   @Override
   public void applyReShard(String parentShardId, List<ChildShard> childShards) {
+    // FIXME: this still have issue for *shard-down case* - if child shards are
+    // seen on multiple nodes, multiple nodes will try to start reading from same
+    // child shard.
     shardsCheckpointsMap.computeIfPresent(parentShardId, (k, v) -> v.markClosed());
     for (ChildShard childShard : childShards) {
       ShardCheckpoint newCheckpoint =
@@ -110,7 +113,7 @@ class ShardSubscribersPoolStateImpl implements ShardSubscribersPoolState {
    * This is called by Beam threads, but it's assumed not to be called upon each record fetched from
    * the buffer -> fine not to pre-compute it and compute on-demand
    *
-   * TODO: add real implementation
+   * FIXME: add real implementation
    *
    * @return greatest timestamp among all ack-ed so far
    */
