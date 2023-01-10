@@ -25,7 +25,6 @@ import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.Immutabl
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.kinesis.common.InitialPositionInStream;
 
 class ShardSubscribersPoolStateImpl implements ShardSubscribersPoolState {
@@ -90,30 +89,25 @@ class ShardSubscribersPoolStateImpl implements ShardSubscribersPoolState {
    * before we can delete parentShardId data from the state.
    *
    * @param parentShardId shard which was closed
-   * @param childShards carries data necessary for creating checkpoints for child shards
+   * @param successorShardsIds carries data necessary for creating checkpoints for successor shards
    */
   @Override
-  public void applyReShard(String parentShardId, List<ChildShard> childShards) {
-    // FIXME: this still have issue for *shard-down case* - if child shards are
-    // seen on multiple nodes, multiple nodes will try to start reading from same
-    // child shard.
+  public void applyReShard(String parentShardId, List<String> successorShardsIds) {
     shardsCheckpointsMap.computeIfPresent(parentShardId, (k, v) -> v.markClosed());
-    for (ChildShard childShard : childShards) {
+    for (String childShardId : successorShardsIds) {
       ShardCheckpoint newCheckpoint =
           new ShardCheckpoint(
               config.getStreamName(),
               config.getConsumerArn(),
-              childShard.shardId(),
+              childShardId,
               new StartingPoint(InitialPositionInStream.TRIM_HORIZON));
-      shardsCheckpointsMap.putIfAbsent(childShard.shardId(), newCheckpoint);
+      shardsCheckpointsMap.putIfAbsent(childShardId, newCheckpoint);
     }
   }
 
   /**
    * This is called by Beam threads, but it's assumed not to be called upon each record fetched from
    * the buffer -> fine not to pre-compute it and compute on-demand
-   *
-   * <p>FIXME: add real implementation
    *
    * @return greatest timestamp among all ack-ed so far
    */

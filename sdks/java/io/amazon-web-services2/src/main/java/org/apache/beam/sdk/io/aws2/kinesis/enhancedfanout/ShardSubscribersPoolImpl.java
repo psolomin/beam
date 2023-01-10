@@ -19,6 +19,8 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.Checkers.checkNotNull;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,6 +42,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.services.kinesis.model.ChildShard;
 
 public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable {
   private static final Logger LOG = LoggerFactory.getLogger(ShardSubscribersPoolImpl.class);
@@ -176,6 +179,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
 
   @SuppressWarnings("FutureReturnValueIgnored")
   private void createAndSubmitSubscribers() {
+    // FIXME: if future completes with unrecoverable error, entire reader should fail
     KinesisReaderCheckpoint initialCheckpoint = state.getCheckpointMark();
     initialCheckpoint
         .iterator()
@@ -196,16 +200,41 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
 
   @SuppressWarnings("FutureReturnValueIgnored")
   private void processReShardSignal(ReShardSignal reShardSignal) throws InterruptedException {
-    // FIXME: this still have issue for *shard-down case* - if child shards are
-    // seen on multiple nodes, multiple nodes will try to start reading from same
-    // child shard.
+    // FIXME: if future completes with unrecoverable error, entire reader should fail
     LOG.info("Processing re-shard signal {}", reShardSignal);
+
+    List<String> successorShardsIds = new ArrayList<>();
+
+    for (ChildShard childShard : reShardSignal.getChildShards())
+      if (childShard.parentShards().contains(reShardSignal.getSenderId()))
+        if (childShard.parentShards().size() > 1) {
+          // This is the case of merging two shards into one.
+          // when there are 2 parent shards, we only pick it up if
+          // its max shard equals to sender shard ID
+          String maxId = childShard.parentShards().stream().max(String::compareTo).get();
+          if (reShardSignal.getSenderId().equals(maxId))
+            successorShardsIds.add(childShard.shardId());
+        } else
+          // This is the case when shard is split
+          successorShardsIds.add(childShard.shardId());
 
     checkNotNull(shardSubscribers.get(reShardSignal.getSenderId()), reShardSignal.getSenderId())
         .stop();
-
     shardSubscribers.remove(reShardSignal.getSenderId());
-    state.applyReShard(reShardSignal.getSenderId(), reShardSignal.getChildShards());
+
+    if (successorShardsIds.isEmpty()) {
+      LOG.info("Found no successors for shard {}", reShardSignal.getSenderId());
+      // at this point, current split pool can end up without shards at all.
+      if (shardSubscribers.size() == 0) {
+        LOG.info("Pool doesn't have shards after processing {}. Shutting down.", reShardSignal);
+        initiateGracefulShutdown();
+        return;
+      }
+    } else
+      LOG.info(
+          "Found successors for shard {}: {}", reShardSignal.getSenderId(), successorShardsIds);
+
+    state.applyReShard(reShardSignal.getSenderId(), successorShardsIds);
     reShardSignal
         .getChildShards()
         .forEach(
