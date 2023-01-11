@@ -18,8 +18,6 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import java.util.concurrent.CompletableFuture;
-import org.apache.beam.sdk.io.aws2.common.ClientBuilderFactory;
-import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
@@ -29,14 +27,8 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHan
 public class AsyncClientProxyImpl implements AsyncClientProxy {
   private final KinesisAsyncClient client;
 
-  public AsyncClientProxyImpl(ClientBuilderFactory builderFactory, KinesisIO.Read readSpec) {
-    client =
-        builderFactory
-            .create(
-                KinesisAsyncClient.builder(),
-                Checkers.checkNotNull(readSpec.getClientConfiguration(), "clientConfiguration"),
-                null) // builderFactory already created with AwsOptions
-            .build();
+  public AsyncClientProxyImpl(KinesisAsyncClient client) {
+    this.client = client;
   }
 
   @Override

@@ -45,22 +45,22 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponse;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 
-class KinesisClientProxyStub implements AsyncClientProxy {
+public class KinesisClientProxyStub implements AsyncClientProxy {
   private final KinesisClientStubConfig config;
   private final BlockingQueue<SubscribeToShardRequest> subscribeRequestsCollector;
   private final AtomicInteger seqNumber;
-  private final AtomicInteger subscriptionsPerShardCountdown;
+  private final AtomicInteger subscriptionsCountdown;
   private final Function<KinesisClientStubShardState, Void> eventsSubmitter;
 
   KinesisClientProxyStub(
       KinesisClientStubConfig config,
-      AtomicInteger subscriptionsPerShardCountdown,
+      AtomicInteger subscriptionsCountdown,
       AtomicInteger seqNumber,
       BlockingQueue<SubscribeToShardRequest> subscribeRequestsCollector,
       Function<KinesisClientStubShardState, Void> eventsSubmitter) {
     this.config = config;
     this.seqNumber = seqNumber;
-    this.subscriptionsPerShardCountdown = subscriptionsPerShardCountdown;
+    this.subscriptionsCountdown = subscriptionsCountdown;
     this.subscribeRequestsCollector = subscribeRequestsCollector;
     this.eventsSubmitter = eventsSubmitter;
   }
@@ -91,7 +91,7 @@ class KinesisClientProxyStub implements AsyncClientProxy {
                 request.shardId(),
                 config.getRecordsPerSubscriptionPerShardToSend(),
                 seqNumber,
-                subscriptionsPerShardCountdown,
+                subscriptionsCountdown,
                 responseHandler,
                 eventsSubmitter));
   }

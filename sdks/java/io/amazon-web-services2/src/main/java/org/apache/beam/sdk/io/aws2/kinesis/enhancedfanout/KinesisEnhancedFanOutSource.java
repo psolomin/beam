@@ -31,6 +31,7 @@ import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecordCoder;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 
 public class KinesisEnhancedFanOutSource
     extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoint> {
@@ -55,15 +56,16 @@ public class KinesisEnhancedFanOutSource
   @Override
   public List<KinesisEnhancedFanOutSource> split(int desiredNumSplits, PipelineOptions options)
       throws Exception {
-    ClientBuilder clientBuilder = new ClientBuilderImpl(builderFactory, readSpec);
-    KinesisReaderCheckpoint checkpoint = checkpointGenerator.generate(clientBuilder);
-    List<KinesisEnhancedFanOutSource> sources = newArrayList();
-    for (KinesisReaderCheckpoint partition : checkpoint.splitInto(desiredNumSplits)) {
-      sources.add(
-          new KinesisEnhancedFanOutSource(
-              readSpec, builderFactory, new StaticCheckpointGenerator(partition)));
+    try (AsyncClientProxy kinesis = createClient()) {
+      KinesisReaderCheckpoint checkpoint = checkpointGenerator.generate(kinesis);
+      List<KinesisEnhancedFanOutSource> sources = newArrayList();
+      for (KinesisReaderCheckpoint partition : checkpoint.splitInto(desiredNumSplits)) {
+        sources.add(
+            new KinesisEnhancedFanOutSource(
+                readSpec, builderFactory, new StaticCheckpointGenerator(partition)));
+      }
+      return sources;
     }
-    return sources;
   }
 
   @Override
@@ -75,9 +77,8 @@ public class KinesisEnhancedFanOutSource
       checkpointGenerator = new StaticCheckpointGenerator(checkpointMark);
     }
 
-    ClientBuilder builder = new ClientBuilderImpl(builderFactory, readSpec);
     KinesisEnhancedFanOutSource source = new KinesisEnhancedFanOutSource(readSpec, builderFactory);
-    return new KinesisEnhancedFanOutReader(readSpec, builder, checkpointGenerator, source);
+    return new KinesisEnhancedFanOutReader(readSpec, createClient(), checkpointGenerator, source);
   }
 
   @Override
@@ -88,5 +89,15 @@ public class KinesisEnhancedFanOutSource
   @Override
   public Coder<KinesisRecord> getOutputCoder() {
     return KinesisRecordCoder.of();
+  }
+
+  private AsyncClientProxy createClient() {
+    return new AsyncClientProxyImpl(
+        builderFactory
+            .create(
+                KinesisAsyncClient.builder(),
+                Checkers.checkNotNull(readSpec.getClientConfiguration(), "clientConfiguration"),
+                null) // builderFactory already created with AwsOptions
+            .build());
   }
 }

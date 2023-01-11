@@ -25,6 +25,7 @@ import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.LimitExceededException;
 import software.amazon.awssdk.services.kinesis.model.ProvisionedThroughputExceededException;
 
+// CHECKSTYLE.OFF: JavadocMethod
 public class ErrorsUtils {
   /**
    * Wraps Amazon specific exceptions into more friendly format.

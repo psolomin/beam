@@ -37,7 +37,7 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
 
   private final KinesisIO.Read spec;
   private final Config config;
-  private final ClientBuilder clientBuilder;
+  private final AsyncClientProxy kinesis;
   private final KinesisEnhancedFanOutSource source;
   private final CheckpointGenerator checkpointGenerator;
 
@@ -46,11 +46,11 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
 
   KinesisEnhancedFanOutReader(
       KinesisIO.Read spec,
-      ClientBuilder clientBuilder,
+      AsyncClientProxy kinesis,
       CheckpointGenerator checkpointGenerator,
       KinesisEnhancedFanOutSource source) {
     this.spec = checkNotNull(spec, "spec");
-    this.clientBuilder = checkNotNull(clientBuilder, "clientBuilder");
+    this.kinesis = checkNotNull(kinesis, "kinesis");
     this.checkpointGenerator = checkNotNull(checkpointGenerator, "checkpointGenerator");
     this.source = source;
     this.config = Config.fromIOSpec(spec);
@@ -93,8 +93,12 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
   @Override
   public void close() throws IOException {
     try {
-      boolean isStoppedCleanly = shardSubscribersPool.get().stop();
-      if (!isStoppedCleanly) LOG.warn("Pool was not stopped correctly");
+      try (AutoCloseable c = kinesis) {
+        boolean isStoppedCleanly = shardSubscribersPool.get().stop();
+        if (!isStoppedCleanly) {
+          LOG.warn("Pool was not stopped correctly");
+        }
+      }
     } catch (RuntimeException e) {
       throw e;
     } catch (Exception e) {
@@ -118,11 +122,10 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
   }
 
   private ShardSubscribersPool createPool() throws TransientKinesisException {
-    KinesisReaderCheckpoint initialCheckpoint = checkpointGenerator.generate(clientBuilder);
+    KinesisReaderCheckpoint initialCheckpoint = checkpointGenerator.generate(kinesis);
     ShardSubscribersPoolState shardSubscribersPoolState =
         new ShardSubscribersPoolStateImpl(config, initialCheckpoint);
     RecordsBuffer recordsBuffer = new RecordsBufferImpl(config, shardSubscribersPoolState);
-    return new ShardSubscribersPoolImpl(
-        config, clientBuilder, shardSubscribersPoolState, recordsBuffer);
+    return new ShardSubscribersPoolImpl(config, kinesis, shardSubscribersPoolState, recordsBuffer);
   }
 }

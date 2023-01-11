@@ -49,7 +49,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
   private static final String LOG_MSG_TEMPLATE = "Stream = {} consumer = {}";
 
   private final Config config;
-  private final ClientBuilder clientBuilder;
+  private final AsyncClientProxy kinesis;
   private final ExecutorService executorService;
   private final BlockingQueue<ShardSubscriberSignal> signals;
   private final AtomicBoolean isRunning = new AtomicBoolean(false);
@@ -60,11 +60,11 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
 
   ShardSubscribersPoolImpl(
       Config config,
-      ClientBuilder clientBuilder,
+      AsyncClientProxy kinesis,
       ShardSubscribersPoolState initialState,
       RecordsBuffer recordsBuffer) {
     this.config = config;
-    this.clientBuilder = clientBuilder;
+    this.kinesis = kinesis;
     this.recordsBuffer = recordsBuffer;
     this.executorService = createThreadPool(config);
     this.state = initialState;
@@ -81,11 +81,12 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
     t.setDaemon(true);
     t.start();
     try {
-      if (consumerStartedLatch.await(config.getPoolStartTimeoutMs(), TimeUnit.MILLISECONDS))
+      if (consumerStartedLatch.await(config.getPoolStartTimeoutMs(), TimeUnit.MILLISECONDS)) {
         return true;
-      else
+      } else {
         throw new RuntimeException(
             String.format("Did not start within %s ms", config.getPoolStartTimeoutMs()));
+      }
     } catch (InterruptedException e) {
       throw new RuntimeException("Interrupted while waiting to start");
     }
@@ -120,9 +121,11 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
   public CustomOptional<KinesisRecord> nextRecord() {
     // TODO: handle this in nicer way
     CustomOptional<Record> maybeRecord = recordsBuffer.fetchOne();
-    if (maybeRecord.isPresent() && maybeRecord.get().getKinesisRecord().isPresent())
+    if (maybeRecord.isPresent() && maybeRecord.get().getKinesisRecord().isPresent()) {
       return CustomOptional.of(maybeRecord.get().getKinesisRecord().get());
-    else return CustomOptional.absent();
+    } else {
+      return CustomOptional.absent();
+    }
   }
 
   @Override
@@ -165,9 +168,12 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
         ShardSubscriberSignal signal =
             signals.poll(config.getPoolSignalsPollTimeoutMs(), TimeUnit.MILLISECONDS);
         if (signal != null) {
-          if (signal instanceof ReShardSignal) processReShardSignal((ReShardSignal) signal);
-          if (signal instanceof CriticalErrorSignal)
+          if (signal instanceof ReShardSignal) {
+            processReShardSignal((ReShardSignal) signal);
+          }
+          if (signal instanceof CriticalErrorSignal) {
             processCriticalError((CriticalErrorSignal) signal);
+          }
         } else {
           LOG.info("No re-shard events to handle");
         }
@@ -187,12 +193,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
             shardCheckpoint -> {
               ShardSubscriber s =
                   new ShardSubscriberImpl(
-                      config,
-                      shardCheckpoint.getShardId(),
-                      clientBuilder,
-                      this,
-                      state,
-                      recordsBuffer);
+                      config, shardCheckpoint.getShardId(), kinesis, this, state, recordsBuffer);
               shardSubscribers.put(shardCheckpoint.getShardId(), s);
               executorService.submit(s);
             });
@@ -200,23 +201,28 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
 
   @SuppressWarnings("FutureReturnValueIgnored")
   private void processReShardSignal(ReShardSignal reShardSignal) throws InterruptedException {
-    // FIXME: if future completes with unrecoverable error, entire reader should fail
+    // FIXME: If future completes with unrecoverable error, entire reader should fail
+    // FIXME: Down-sharding can cause shards to be "lost"! Re-visit this logic!
     LOG.info("Processing re-shard signal {}", reShardSignal);
 
     List<String> successorShardsIds = new ArrayList<>();
 
-    for (ChildShard childShard : reShardSignal.getChildShards())
-      if (childShard.parentShards().contains(reShardSignal.getSenderId()))
+    for (ChildShard childShard : reShardSignal.getChildShards()) {
+      if (childShard.parentShards().contains(reShardSignal.getSenderId())) {
         if (childShard.parentShards().size() > 1) {
           // This is the case of merging two shards into one.
           // when there are 2 parent shards, we only pick it up if
           // its max shard equals to sender shard ID
           String maxId = childShard.parentShards().stream().max(String::compareTo).get();
-          if (reShardSignal.getSenderId().equals(maxId))
+          if (reShardSignal.getSenderId().equals(maxId)) {
             successorShardsIds.add(childShard.shardId());
-        } else
+          }
+        } else {
           // This is the case when shard is split
           successorShardsIds.add(childShard.shardId());
+        }
+      }
+    }
 
     checkNotNull(shardSubscribers.get(reShardSignal.getSenderId()), reShardSignal.getSenderId())
         .stop();
@@ -230,10 +236,10 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
         initiateGracefulShutdown();
         return;
       }
-    } else
+    } else {
       LOG.info(
           "Found successors for shard {}: {}", reShardSignal.getSenderId(), successorShardsIds);
-
+    }
     state.applyReShard(reShardSignal.getSenderId(), successorShardsIds);
     reShardSignal
         .getChildShards()
@@ -242,7 +248,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
               if (!shardSubscribers.containsKey(childShard.shardId())) {
                 ShardSubscriber s =
                     new ShardSubscriberImpl(
-                        config, childShard.shardId(), clientBuilder, this, state, recordsBuffer);
+                        config, childShard.shardId(), kinesis, this, state, recordsBuffer);
                 shardSubscribers.put(childShard.shardId(), s);
                 executorService.submit(s);
               }

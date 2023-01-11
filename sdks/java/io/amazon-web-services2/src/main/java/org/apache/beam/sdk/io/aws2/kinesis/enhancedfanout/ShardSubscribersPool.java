@@ -33,9 +33,9 @@ interface ShardSubscribersPool {
 
   void sendShardErrorSignal(String shardId, ShardEventWrapper event);
 
+  // Beam-specific methods
   CustomOptional<KinesisRecord> nextRecord();
 
-  // Beam-specific methods
   Instant getWatermark();
 
   KinesisReaderCheckpoint getCheckpointMark();

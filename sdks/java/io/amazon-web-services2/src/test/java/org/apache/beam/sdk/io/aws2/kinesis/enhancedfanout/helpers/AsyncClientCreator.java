@@ -17,40 +17,31 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.AsyncClientProxy;
-import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.ClientBuilder;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 
-public class KinesisClientBuilderStub implements ClientBuilder {
+public class AsyncClientCreator {
   private final KinesisClientStubConfig config;
   private final Function<KinesisClientStubShardState, Void> eventsSubmitter;
-  private final BlockingQueue<SubscribeToShardRequest> subscribeRequestsSeenFromAllCreatedClients =
+  private final BlockingQueue<SubscribeToShardRequest> subscribeRequestsSeen =
       new LinkedBlockingQueue<>(Integer.MAX_VALUE);
   private final AtomicInteger seqNumber = new AtomicInteger();
 
-  KinesisClientBuilderStub(
+  AsyncClientCreator(
       KinesisClientStubConfig config, Function<KinesisClientStubShardState, Void> eventsSubmitter) {
     this.config = config;
     this.eventsSubmitter = eventsSubmitter;
   }
 
-  @Override
-  public AsyncClientProxy build() {
+  public KinesisClientProxyStub create() {
     return new KinesisClientProxyStub(
         config,
         new AtomicInteger(config.getSubscriptionsPerShard()),
         seqNumber,
-        subscribeRequestsSeenFromAllCreatedClients,
+        subscribeRequestsSeen,
         eventsSubmitter);
-  }
-
-  public List<SubscribeToShardRequest> subscribeRequestsSeen() {
-    return new ArrayList<>(subscribeRequestsSeenFromAllCreatedClients);
   }
 }

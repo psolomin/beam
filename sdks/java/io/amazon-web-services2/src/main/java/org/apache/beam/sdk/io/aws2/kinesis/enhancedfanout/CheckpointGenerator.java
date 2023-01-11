@@ -25,5 +25,5 @@ import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
  * implementing class.
  */
 interface CheckpointGenerator extends Serializable {
-  KinesisReaderCheckpoint generate(ClientBuilder clientBuilder) throws TransientKinesisException;
+  KinesisReaderCheckpoint generate(AsyncClientProxy kinesis) throws TransientKinesisException;
 }

@@ -548,9 +548,9 @@ public final class KinesisIO {
 
       Unbounded<KinesisRecord> unbounded;
 
-      if (getConsumerArn() == null)
+      if (getConsumerArn() == null) {
         unbounded = org.apache.beam.sdk.io.Read.from(new KinesisSource(this));
-      else {
+      } else {
         AwsOptions awsOptions = input.getPipeline().getOptions().as(AwsOptions.class);
         ClientBuilderFactory builderFactory = ClientBuilderFactory.getFactory(awsOptions);
         unbounded =

@@ -56,7 +56,7 @@ class ShardSubscriberImpl implements ShardSubscriber {
   ShardSubscriberImpl(
       Config config,
       String shardId,
-      ClientBuilder clientBuilder,
+      AsyncClientProxy asyncClientProxy,
       ShardSubscribersPool pool,
       ShardSubscribersPoolState initialState,
       RecordsBuffer recordsBuffer) {
@@ -66,7 +66,7 @@ class ShardSubscriberImpl implements ShardSubscriber {
     this.pool = pool;
     this.recordsBuffer = recordsBuffer;
     this.isRunning.set(true);
-    this.asyncClientProxy = clientBuilder.build();
+    this.asyncClientProxy = asyncClientProxy;
   }
 
   @Override
@@ -75,19 +75,15 @@ class ShardSubscriberImpl implements ShardSubscriber {
       try {
         ShardCheckpoint shardCheckpoint = state.getCheckpoint(shardId);
         boolean reSubscribe = subscribe(shardCheckpoint.toStartingPosition(), this::consume);
-        if (!reSubscribe) break;
+        if (!reSubscribe) {
+          break;
+        }
       } catch (InterruptedException e) {
         LOG.warn(
             "Interrupted in subscription loop for stream {} shard {}",
             config.getStreamName(),
             shardId);
       }
-    }
-
-    try {
-      asyncClientProxy.close();
-    } catch (Exception e) {
-      LOG.warn("Failed while closing client: ", e);
     }
   }
 
@@ -146,9 +142,10 @@ class ShardSubscriberImpl implements ShardSubscriber {
 
     if (!subscriptionWasEstablished) {
       LOG.error("Subscribe request {} failed.", subscribeRequestId);
-      if (!f.isCompletedExceptionally())
+      if (!f.isCompletedExceptionally()) {
         LOG.warn(
             "subscribeToShard request {} failed, but future was not complete.", subscribeRequestId);
+      }
       // TODO: signal error to coordinator
       shardEventsSubscriber.cancel();
       throw new RuntimeException();
@@ -184,8 +181,9 @@ class ShardSubscriberImpl implements ShardSubscriber {
         case ERROR:
           {
             shardEventsSubscriber.cancel();
-            if (maybeRecoverableError(event)) return true;
-            else {
+            if (maybeRecoverableError(event)) {
+              return true;
+            } else {
               handleCriticalError(event);
               return false;
             }

@@ -69,8 +69,12 @@ class Record {
 
   @Override
   public boolean equals(@Nullable Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
     Record record = (Record) o;
     return shardId.equals(record.shardId)
         && kinesisRecord.equals(record.kinesisRecord)

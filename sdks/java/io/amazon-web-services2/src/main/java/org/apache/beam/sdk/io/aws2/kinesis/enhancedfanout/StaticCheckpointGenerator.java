@@ -33,7 +33,7 @@ class StaticCheckpointGenerator implements CheckpointGenerator {
   }
 
   @Override
-  public KinesisReaderCheckpoint generate(ClientBuilder clientBuilder) {
+  public KinesisReaderCheckpoint generate(AsyncClientProxy kinesis) {
     return checkpoint;
   }
 

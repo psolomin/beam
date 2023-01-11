@@ -15,8 +15,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-public interface ClientBuilder {
-  AsyncClientProxy build();
-}
+/** Internal data classes for reading from Amazon Kinesis with Enhanced Fan-Out Consumers. */
+@Experimental(Kind.SOURCE_SINK)
+package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals;
+
+import org.apache.beam.sdk.annotations.Experimental;
+import org.apache.beam.sdk.annotations.Experimental.Kind;

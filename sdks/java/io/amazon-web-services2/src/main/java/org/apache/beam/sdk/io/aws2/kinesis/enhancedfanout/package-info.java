@@ -15,22 +15,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+/** Transforms for reading from Amazon Kinesis with Enhanced Fan-Out Consumers. */
+@Experimental(Kind.SOURCE_SINK)
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-import org.apache.beam.sdk.io.aws2.common.ClientBuilderFactory;
-import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
-
-class ClientBuilderImpl implements ClientBuilder {
-  private final ClientBuilderFactory builderFactory;
-  private final KinesisIO.Read readSpec;
-
-  ClientBuilderImpl(ClientBuilderFactory builderFactory, KinesisIO.Read readSpec) {
-    this.builderFactory = builderFactory;
-    this.readSpec = readSpec;
-  }
-
-  @Override
-  public AsyncClientProxy build() {
-    return new AsyncClientProxyImpl(builderFactory, readSpec);
-  }
-}
+import org.apache.beam.sdk.annotations.Experimental;
+import org.apache.beam.sdk.annotations.Experimental.Kind;

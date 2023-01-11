@@ -59,9 +59,10 @@ class ShardSubscribersPoolStateImpl implements ShardSubscribersPoolState {
     } else {
       // checkpoint only
       // TODO: use optional instead
-      if (record.getContinuationSequenceNumber() != null)
+      if (record.getContinuationSequenceNumber() != null) {
         shardsCheckpointsMap.computeIfPresent(
             record.getShardId(), (k, v) -> v.moveAfter(record.getContinuationSequenceNumber()));
+      }
       // ack-ing last record in the buffer, which is an artificial event without records
       else {
         ShardCheckpoint checkpointToDelete =
@@ -106,8 +107,8 @@ class ShardSubscribersPoolStateImpl implements ShardSubscribersPoolState {
   }
 
   /**
-   * This is called by Beam threads, but it's assumed not to be called upon each record fetched from
-   * the buffer -> fine not to pre-compute it and compute on-demand
+   * This is called by Beam threads. It's assumed not to be called upon each record fetched from the
+   * buffer -> fine not to pre-compute it and compute on-demand
    *
    * @return greatest timestamp among all ack-ed so far
    */
@@ -117,7 +118,7 @@ class ShardSubscribersPoolStateImpl implements ShardSubscribersPoolState {
   }
 
   /**
-   * This is called by Beam threads, but it's assumed not to be called upon each record fetched from
+   * This is called by Beam thread. But it's assumed not to be called upon each record fetched from
    * the buffer -> fine not to pre-compute it and compute on-demand
    *
    * @return greatest timestamp among all ack-ed so far
