@@ -66,8 +66,9 @@ public class KinesisClientStubShardState {
       state.subscriber.onNext(state.recordsIterator.next());
     } else {
       SubscribeToShardEvent reShardEvent = SHARD_ID_TO_SHARD_UP_EVENT.get(state.shardId);
-      if (reShardEvent == null)
+      if (reShardEvent == null) {
         throw new IllegalStateException(String.format("Unexpected shard id %s", state.shardId));
+      }
 
       state.subscriber.onNext(reShardEvent);
     }
@@ -79,9 +80,9 @@ public class KinesisClientStubShardState {
       state.subscriber.onNext(state.recordsIterator.next());
     } else {
       SubscribeToShardEvent reShardEvent = SHARD_ID_TO_SHARD_DOWN_EVENT.get(state.shardId);
-      if (reShardEvent == null)
+      if (reShardEvent == null) {
         throw new IllegalStateException(String.format("Unexpected shard id %s", state.shardId));
-
+      }
       state.subscriber.onNext(reShardEvent);
     }
     return null;

@@ -40,24 +40,24 @@ public class ShardsListingUtils {
    * we need to consume all backlog from closed shards too.
    */
   static List<Shard> getShardsAfterParent(
-      String parentShardId, Config config, ClientBuilder builder) {
+      String parentShardId, Config config, AsyncClientProxy kinesis) {
     ListShardsRequest listShardsRequest =
         ListShardsRequest.builder()
             .streamName(config.getStreamName())
             .shardFilter(buildSingleShardFilter(parentShardId))
             .build();
 
-    return tryListingShards(listShardsRequest, builder).shards();
+    return tryListingShards(listShardsRequest, kinesis).shards();
   }
 
-  static List<ShardCheckpoint> generateShardsCheckpoints(Config config, ClientBuilder builder) {
+  static List<ShardCheckpoint> generateShardsCheckpoints(Config config, AsyncClientProxy kinesis) {
     ListShardsRequest listShardsRequest =
         ListShardsRequest.builder()
             .streamName(config.getStreamName())
             .shardFilter(buildFilter(config))
             .build();
 
-    ListShardsResponse response = tryListingShards(listShardsRequest, builder);
+    ListShardsResponse response = tryListingShards(listShardsRequest, kinesis);
     return response.shards().stream()
         .map(
             s ->
@@ -70,10 +70,10 @@ public class ShardsListingUtils {
   }
 
   private static ListShardsResponse tryListingShards(
-      ListShardsRequest listShardsRequest, ClientBuilder builder) {
-    try (AsyncClientProxy c = builder.build()) {
+      ListShardsRequest listShardsRequest, AsyncClientProxy kinesis) {
+    try {
       ListShardsResponse response =
-          c.listShards(listShardsRequest).get(shardListingTimeoutMs, TimeUnit.MILLISECONDS);
+          kinesis.listShards(listShardsRequest).get(shardListingTimeoutMs, TimeUnit.MILLISECONDS);
       LOG.debug("Shards found = {}", response.shards());
       return response;
     } catch (ExecutionException | InterruptedException | TimeoutException e) {

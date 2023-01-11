@@ -55,7 +55,9 @@ class RecordsBufferImpl implements RecordsBuffer {
       if (recordOrNull != null) {
         state.ackRecord(recordOrNull);
         return CustomOptional.of(recordOrNull);
-      } else return CustomOptional.absent();
+      } else {
+        return CustomOptional.absent();
+      }
     } catch (InterruptedException e) {
       LOG.warn("Interrupted while fetching record");
       return CustomOptional.absent();

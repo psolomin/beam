@@ -20,17 +20,17 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers;
 class KinesisClientStubConfig {
   private final Integer initialShardsCnt;
   private final Integer finalShardId;
-  private final Integer subscriptionsPerShard;
+  private final Integer subscriptionsCnt;
   private final Integer recordsPerSubscriptionPerShardToSend;
 
   KinesisClientStubConfig(
       Integer initialShardsCnt,
       Integer finalShardId,
-      Integer subscriptionsPerShard,
+      Integer subscriptionsCnt,
       Integer recordsPerSubscriptionPerShardToSend) {
     this.initialShardsCnt = initialShardsCnt;
     this.finalShardId = finalShardId;
-    this.subscriptionsPerShard = subscriptionsPerShard;
+    this.subscriptionsCnt = subscriptionsCnt;
     this.recordsPerSubscriptionPerShardToSend = recordsPerSubscriptionPerShardToSend;
   }
 
@@ -43,7 +43,7 @@ class KinesisClientStubConfig {
   }
 
   public Integer getSubscriptionsPerShard() {
-    return subscriptionsPerShard;
+    return subscriptionsCnt;
   }
 
   public Integer getRecordsPerSubscriptionPerShardToSend() {

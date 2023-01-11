@@ -38,10 +38,10 @@ class FromScratchCheckpointGenerator implements CheckpointGenerator {
   }
 
   @Override
-  public KinesisReaderCheckpoint generate(ClientBuilder clientBuilder)
+  public KinesisReaderCheckpoint generate(AsyncClientProxy kinesis)
       throws TransientKinesisException {
     List<ShardCheckpoint> streamShards =
-        ShardsListingUtils.generateShardsCheckpoints(config, clientBuilder);
+        ShardsListingUtils.generateShardsCheckpoints(config, kinesis);
 
     LOG.info(
         "Creating a checkpoint with following shards {} at {}",
