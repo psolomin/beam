@@ -241,18 +241,16 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
           "Found successors for shard {}: {}", reShardSignal.getSenderId(), successorShardsIds);
     }
     state.applyReShard(reShardSignal.getSenderId(), successorShardsIds);
-    reShardSignal
-        .getChildShards()
-        .forEach(
-            childShard -> {
-              if (!shardSubscribers.containsKey(childShard.shardId())) {
-                ShardSubscriber s =
-                    new ShardSubscriberImpl(
-                        config, childShard.shardId(), kinesis, this, state, recordsBuffer);
-                shardSubscribers.put(childShard.shardId(), s);
-                executorService.submit(s);
-              }
-            });
+    successorShardsIds.forEach(
+        childShardId -> {
+          ShardSubscriber s =
+              new ShardSubscriberImpl(config, childShardId, kinesis, this, state, recordsBuffer);
+          ShardSubscriber previous = shardSubscribers.putIfAbsent(childShardId, s);
+          if (previous != null) {
+            throw new RuntimeException(String.format("Shard %s already registered", childShardId));
+          }
+          executorService.submit(s);
+        });
   }
 
   private void processCriticalError(CriticalErrorSignal criticalErrorSignal) {
