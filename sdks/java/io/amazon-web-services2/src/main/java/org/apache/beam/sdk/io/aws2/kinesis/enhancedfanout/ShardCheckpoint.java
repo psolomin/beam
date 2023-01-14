@@ -27,7 +27,7 @@ import java.io.Serializable;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.apache.beam.sdk.io.aws2.kinesis.TimeUtil;
-import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joda.time.Instant;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.awssdk.services.kinesis.model.StartingPosition;
@@ -54,9 +54,9 @@ public class ShardCheckpoint implements Serializable {
   private final String shardId;
   private final ShardIteratorType shardIteratorType;
 
-  private final Optional<String> continuationSequenceNumber;
-  private final Optional<Long> subSequenceNumber;
-  private final Optional<Instant> timestamp;
+  private final @Nullable String continuationSequenceNumber;
+  private final long subSequenceNumber;
+  private final @Nullable Instant timestamp;
   private final boolean shardIsClosed;
 
   public ShardCheckpoint(
@@ -66,11 +66,9 @@ public class ShardCheckpoint implements Serializable {
         consumerArn,
         shardId,
         ShardIteratorType.fromValue(startingPoint.getPositionName()),
-        Optional.absent(),
-        Optional.absent(),
-        startingPoint.getTimestamp() != null
-            ? Optional.of(startingPoint.getTimestamp())
-            : Optional.absent(),
+        null,
+        0L,
+        startingPoint.getTimestamp(),
         false);
   }
 
@@ -79,9 +77,9 @@ public class ShardCheckpoint implements Serializable {
       String consumerArn,
       String shardId,
       ShardIteratorType shardIteratorType,
-      Optional<String> continuationSequenceNumber,
-      Optional<Long> subSequenceNumber,
-      Optional<Instant> timestamp,
+      @Nullable String continuationSequenceNumber,
+      long subSequenceNumber,
+      @Nullable Instant timestamp,
       boolean shardIsClosed) {
     this.shardIteratorType = checkNotNull(shardIteratorType, "shardIteratorType");
     this.streamName = checkNotNull(streamName, "streamName");
@@ -94,14 +92,14 @@ public class ShardCheckpoint implements Serializable {
           "You must provide sequence number for AT_SEQUENCE_NUMBER" + " or AFTER_SEQUENCE_NUMBER");
     } else {
       checkArgument(
-          !continuationSequenceNumber.isPresent(),
+          continuationSequenceNumber == null,
           "Sequence number must be empty for LATEST, TRIM_HORIZON or AT_TIMESTAMP");
     }
     if (shardIteratorType == AT_TIMESTAMP) {
-      checkArgument(!timestamp.isPresent(), "You must provide timestamp for AT_TIMESTAMP");
+      checkArgument(timestamp != null, "You must provide timestamp for AT_TIMESTAMP");
     } else {
       checkArgument(
-          !timestamp.isPresent(),
+          timestamp == null,
           "Timestamp must be empty for an iterator type other than AT_TIMESTAMP");
     }
 
@@ -121,7 +119,8 @@ public class ShardCheckpoint implements Serializable {
    */
   public boolean isBeforeOrAt(KinesisRecord other, String continuationSequenceNumber) {
     if (shardIteratorType == AT_TIMESTAMP) {
-      return timestamp.get().compareTo(other.getApproximateArrivalTimestamp()) <= 0;
+      return checkNotNull(timestamp, "timestamp").compareTo(other.getApproximateArrivalTimestamp())
+          <= 0;
     }
     int result = extendedSequenceNumber().compareTo(other.getExtendedSequenceNumber());
     if (result == 0) {
@@ -131,21 +130,23 @@ public class ShardCheckpoint implements Serializable {
   }
 
   private ExtendedSequenceNumber extendedSequenceNumber() {
-    String fullSequenceNumber = continuationSequenceNumber.get();
+    String fullSequenceNumber = continuationSequenceNumber;
     if (fullSequenceNumber == null) {
       fullSequenceNumber = shardIteratorType.toString();
     }
-    return new ExtendedSequenceNumber(fullSequenceNumber, subSequenceNumber.get());
+    return new ExtendedSequenceNumber(fullSequenceNumber, subSequenceNumber);
   }
 
   public StartingPosition toStartingPosition() {
     StartingPosition.Builder builder = StartingPosition.builder().type(shardIteratorType);
     switch (shardIteratorType) {
       case AT_TIMESTAMP:
-        return builder.timestamp(TimeUtil.toJava(timestamp.get())).build();
+        return builder.timestamp(TimeUtil.toJava(checkNotNull(timestamp, "timestamp"))).build();
       case AT_SEQUENCE_NUMBER:
       case AFTER_SEQUENCE_NUMBER:
-        return builder.sequenceNumber(continuationSequenceNumber.get()).build();
+        return builder
+            .sequenceNumber(checkNotNull(continuationSequenceNumber, "sequenceNumber"))
+            .build();
 
       default:
         return builder.build();
@@ -165,8 +166,8 @@ public class ShardCheckpoint implements Serializable {
         consumerArn,
         shardId,
         AFTER_SEQUENCE_NUMBER,
-        Optional.of(continuationSequenceNumber),
-        Optional.of(record.getSubSequenceNumber()),
+        continuationSequenceNumber,
+        record.getSubSequenceNumber(),
         timestamp,
         shardIsClosed);
   }
@@ -177,8 +178,8 @@ public class ShardCheckpoint implements Serializable {
         consumerArn,
         shardId,
         AFTER_SEQUENCE_NUMBER,
-        Optional.of(continuationSequenceNumber),
-        Optional.of(0L),
+        continuationSequenceNumber,
+        0L,
         timestamp,
         shardIsClosed);
   }
