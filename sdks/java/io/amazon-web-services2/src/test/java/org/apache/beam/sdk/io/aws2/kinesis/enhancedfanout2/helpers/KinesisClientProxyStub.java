@@ -154,7 +154,7 @@ public class KinesisClientProxyStub implements AsyncClientProxy {
           ImmutableList.of(
               SubscribeToShardEvent.builder()
                   .millisBehindLatest(0L)
-                  .continuationSequenceNumber(null)
+                  .continuationSequenceNumber(String.valueOf(seqNumber.incrementAndGet()))
                   .build());
     }
 
