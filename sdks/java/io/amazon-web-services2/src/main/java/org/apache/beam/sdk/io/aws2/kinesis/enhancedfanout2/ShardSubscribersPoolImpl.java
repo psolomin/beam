@@ -230,6 +230,8 @@ public class ShardSubscribersPoolImpl {
 
     if (isInitial) {
       shardState.requestRecords(INITIAL_DEMAND_PER_SHARD);
+    } else {
+      shardState.requestRecords(1L);
     }
     shardsStates.put(shardId, shardState);
     LOG.info("Subscription for shard {} established", shardId);
