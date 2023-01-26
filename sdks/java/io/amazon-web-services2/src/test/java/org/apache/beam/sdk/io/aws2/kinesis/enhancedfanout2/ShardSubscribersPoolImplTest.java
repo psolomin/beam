@@ -22,21 +22,23 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
+import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.helpers.KinesisClientProxyStub;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.helpers.KinesisStubBehaviours;
 import org.junit.Test;
 
 public class ShardSubscribersPoolImplTest {
   @Test
-  public void test() {
+  public void test() throws TransientKinesisException {
     Config config = createConfig();
     KinesisClientProxyStub kinesis = KinesisStubBehaviours.twoShardsWithRecords();
-    List<String> shardsIds = Arrays.asList("shard-000", "shard-001");
-    ShardSubscribersPoolImpl pool = new ShardSubscribersPoolImpl(config, kinesis, shardsIds);
+    KinesisReaderCheckpoint initialCheckpoint =
+        new FromScratchCheckpointGenerator(config).generate(kinesis);
+    ShardSubscribersPoolImpl pool =
+        new ShardSubscribersPoolImpl(config, kinesis, initialCheckpoint);
     assertTrue(pool.start());
     List<KinesisRecord> actualRecords = waitForRecords(pool, 12);
     assertEquals(12, actualRecords.size());

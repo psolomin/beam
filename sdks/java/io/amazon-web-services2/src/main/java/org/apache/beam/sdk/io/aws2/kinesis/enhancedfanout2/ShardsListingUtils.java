@@ -34,7 +34,23 @@ public class ShardsListingUtils {
   private static final Logger LOG = LoggerFactory.getLogger(ShardsListingUtils.class);
   private static final int shardListingTimeoutMs = 10_000;
 
-  static List<String> getListOfShards(Config config, AsyncClientProxy kinesis) {
+  /*
+   * Note that it returns inactive shards as well, and this is intentional:
+   * If consumer starts with AT_TIMESTAMP or at TRIM_HORIZON,
+   * we need to consume all backlog from closed shards too.
+   */
+  static List<Shard> getShardsAfterParent(
+      String parentShardId, Config config, AsyncClientProxy kinesis) {
+    ListShardsRequest listShardsRequest =
+        ListShardsRequest.builder()
+            .streamName(config.getStreamName())
+            .shardFilter(buildSingleShardFilter(parentShardId))
+            .build();
+
+    return tryListingShards(listShardsRequest, kinesis).shards();
+  }
+
+  static List<ShardCheckpoint> generateShardsCheckpoints(Config config, AsyncClientProxy kinesis) {
     ListShardsRequest listShardsRequest =
         ListShardsRequest.builder()
             .streamName(config.getStreamName())
@@ -42,7 +58,15 @@ public class ShardsListingUtils {
             .build();
 
     ListShardsResponse response = tryListingShards(listShardsRequest, kinesis);
-    return response.shards().stream().map(Shard::shardId).collect(Collectors.toList());
+    return response.shards().stream()
+        .map(
+            s ->
+                new ShardCheckpoint(
+                    config.getStreamName(),
+                    config.getConsumerArn(),
+                    s.shardId(),
+                    config.getStartingPoint()))
+        .collect(Collectors.toList());
   }
 
   private static ListShardsResponse tryListingShards(
@@ -75,5 +99,9 @@ public class ShardsListingUtils {
       default:
         throw new IllegalStateException(String.format("Invalid config %s", config));
     }
+  }
+
+  private static ShardFilter buildSingleShardFilter(String shardId) {
+    return ShardFilter.builder().shardId(shardId).type(ShardFilterType.AFTER_SHARD_ID).build();
   }
 }

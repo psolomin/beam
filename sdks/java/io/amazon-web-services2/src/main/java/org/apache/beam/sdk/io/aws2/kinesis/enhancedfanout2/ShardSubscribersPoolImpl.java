@@ -29,13 +29,13 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
+import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
-import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
-import software.amazon.awssdk.services.kinesis.model.StartingPosition;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
+import software.amazon.kinesis.common.InitialPositionInStream;
 
 public class ShardSubscribersPoolImpl {
   private static final Logger LOG = LoggerFactory.getLogger(ShardSubscribersPoolImpl.class);
@@ -47,17 +47,17 @@ public class ShardSubscribersPoolImpl {
 
   private final Config config;
   private final AsyncClientProxy kinesis;
-  private final List<String> shardsIds;
-  private final ConcurrentMap<String, KinesisShardEventsSubscriber> subscribers;
+  private final KinesisReaderCheckpoint initialCheckpoint;
+  private final ConcurrentMap<String, ShardSubscriberState> shardsStates;
   private final ConcurrentMap<String, CompletableFuture<Void>> subscriptionFutures;
   private final BlockingQueue<ExtendedKinesisRecord> eventsBuffer;
 
   public ShardSubscribersPoolImpl(
-      Config config, AsyncClientProxy kinesis, List<String> initialShardsIds) {
+      Config config, AsyncClientProxy kinesis, KinesisReaderCheckpoint initialCheckpoint) {
     this.config = config;
     this.kinesis = kinesis;
-    this.shardsIds = initialShardsIds;
-    this.subscribers = new ConcurrentHashMap<>();
+    this.initialCheckpoint = initialCheckpoint;
+    this.shardsStates = new ConcurrentHashMap<>();
     this.subscriptionFutures = new ConcurrentHashMap<>();
     this.eventsBuffer = new LinkedBlockingQueue<>(BUFFER_SIZE);
   }
@@ -71,17 +71,17 @@ public class ShardSubscribersPoolImpl {
     // AT_SEQUENCE_NUMBER:
     // - check if we have seen this seq number before
     // - check if we have seen a sub-sequence number before
-    shardsIds.forEach(
-        shardId ->
+
+    initialCheckpoint.forEach(
+        shardCheckpoint ->
             subscriptionFutures.put(
-                shardId,
-                createSubscription(
-                    shardId, StartingPosition.builder().type(ShardIteratorType.LATEST).build())));
+                shardCheckpoint.getShardId(),
+                createSubscription(shardCheckpoint.getShardId(), shardCheckpoint, true)));
     return true;
   }
 
   public boolean stop() {
-    subscribers.values().forEach(KinesisShardEventsSubscriber::cancel);
+    shardsStates.values().forEach(ShardSubscriberState::cancel);
     subscriptionFutures.values().forEach(f -> f.cancel(false));
     return true;
   }
@@ -98,16 +98,12 @@ public class ShardSubscribersPoolImpl {
       case SUBSCRIPTION_COMPLETE:
         CompletableFuture.runAsync(
             () -> {
-              // TODO: fetch continuation sequence number from checkpoint object
-              subscriptionFutures.computeIfPresent(
-                  event.getShardId(),
-                  (k, v) ->
-                      createSubscription(
-                          k,
-                          StartingPosition.builder()
-                              // ShardIteratorType.AFTER_SEQUENCE_NUMBER
-                              .type(ShardIteratorType.LATEST)
-                              .build()));
+              ShardSubscriberState state = shardsStates.get(event.getShardId());
+              if (state != null) {
+                subscriptionFutures.computeIfPresent(
+                    event.getShardId(),
+                    (k, v) -> createSubscription(k, state.getCheckpoint(), false));
+              }
             });
         break;
       case RE_SHARD:
@@ -115,15 +111,17 @@ public class ShardSubscribersPoolImpl {
             () -> {
               List<String> successorShards = computeSuccessorShardsIds((ReShardEvent) event);
               successorShards.forEach(
-                  s ->
-                      subscriptionFutures.computeIfAbsent(
-                          s,
-                          k ->
-                              createSubscription(
-                                  k,
-                                  StartingPosition.builder()
-                                      .type(ShardIteratorType.TRIM_HORIZON)
-                                      .build())));
+                  successorShardId -> {
+                    ShardCheckpoint newCheckpoint =
+                        new ShardCheckpoint(
+                            config.getStreamName(),
+                            config.getConsumerArn(),
+                            successorShardId,
+                            new StartingPoint(InitialPositionInStream.TRIM_HORIZON));
+                    subscriptionFutures.computeIfAbsent(
+                        successorShardId,
+                        shardId -> createSubscription(shardId, newCheckpoint, false));
+                  });
             });
         break;
       case RECORDS:
@@ -175,13 +173,13 @@ public class ShardSubscribersPoolImpl {
   }
 
   private CompletableFuture<Void> createSubscription(
-      String shardId, StartingPosition startingPosition) {
+      String shardId, ShardCheckpoint checkpoint, boolean isInitial) {
     UUID subscribeRequestId = UUID.randomUUID();
     SubscribeToShardRequest request =
         SubscribeToShardRequest.builder()
             .consumerARN(config.getConsumerArn())
             .shardId(shardId)
-            .startingPosition(startingPosition)
+            .startingPosition(checkpoint.toStartingPosition())
             .build();
 
     LOG.info("Starting subscribe request {} - {}", subscribeRequestId, request);
@@ -195,6 +193,9 @@ public class ShardSubscribersPoolImpl {
             config.getStreamName(),
             config.getConsumerArn(),
             shardId);
+
+    ShardSubscriberState shardState =
+        new ShardSubscriberStateImpl(shardEventsSubscriber, checkpoint);
 
     SubscribeToShardResponseHandler responseHandler =
         SubscribeToShardResponseHandler.builder()
@@ -223,12 +224,14 @@ public class ShardSubscribersPoolImpl {
         LOG.warn(
             "subscribeToShard request {} failed, but future was not complete.", subscribeRequestId);
       }
-      shardEventsSubscriber.cancel();
+      shardState.cancel();
       throw new RuntimeException();
     }
 
-    subscribers.put(shardId, shardEventsSubscriber);
-    shardEventsSubscriber.requestRecords(INITIAL_DEMAND_PER_SHARD);
+    if (isInitial) {
+      shardState.requestRecords(INITIAL_DEMAND_PER_SHARD);
+    }
+    shardsStates.put(shardId, shardState);
     LOG.info("Subscription for shard {} established", shardId);
     return f;
   }
@@ -238,11 +241,11 @@ public class ShardSubscribersPoolImpl {
       ExtendedKinesisRecord maybeRecord =
           eventsBuffer.poll(BUFFER_POLL_WAIT_MS, TimeUnit.MILLISECONDS);
       if (maybeRecord != null) {
-        // ack record, e.g. mutate the checkpoint object
-        if (eventsBuffer.remainingCapacity() > TARGET_MIN_REMAINING_CAPACITY) {
-          KinesisShardEventsSubscriber shardSubscriber = subscribers.get(maybeRecord.getShardId());
-          if (shardSubscriber != null) {
-            shardSubscriber.requestRecords(1L);
+        ShardSubscriberState shardState = shardsStates.get(maybeRecord.getShardId());
+        if (shardState != null) {
+          shardState.ackRecord(maybeRecord);
+          if (eventsBuffer.remainingCapacity() > TARGET_MIN_REMAINING_CAPACITY) {
+            shardState.requestRecords(1L);
           }
         }
         KinesisRecord record = maybeRecord.getKinesisRecord();
