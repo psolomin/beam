@@ -52,7 +52,7 @@ import org.apache.beam.sdk.io.aws2.common.ObjectPool;
 import org.apache.beam.sdk.io.aws2.common.ObjectPool.ClientPool;
 import org.apache.beam.sdk.io.aws2.common.RetryConfiguration;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisPartitioner.ExplicitPartitioner;
-import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.KinesisEnhancedFanOutSource;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.KinesisEnhancedFanOutSource;
 import org.apache.beam.sdk.io.aws2.options.AwsOptions;
 import org.apache.beam.sdk.metrics.Counter;
 import org.apache.beam.sdk.metrics.Distribution;
