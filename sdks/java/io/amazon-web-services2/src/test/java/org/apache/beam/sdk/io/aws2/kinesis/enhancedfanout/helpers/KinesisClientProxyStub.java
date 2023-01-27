@@ -18,6 +18,7 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers;
 
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.RecordsGenerators.createRecord;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 
@@ -153,7 +154,7 @@ public class KinesisClientProxyStub implements AsyncClientProxy {
           ImmutableList.of(
               SubscribeToShardEvent.builder()
                   .millisBehindLatest(0L)
-                  .continuationSequenceNumber(null)
+                  .continuationSequenceNumber(String.valueOf(seqNumber.incrementAndGet()))
                   .build());
     }
 
@@ -161,7 +162,7 @@ public class KinesisClientProxyStub implements AsyncClientProxy {
     Iterator<SubscribeToShardEvent> iterator = eventsToSend.iterator();
     KinesisClientStubShardState state =
         new KinesisClientStubShardState(shardId, subscriber, iterator);
-    doAnswer(a -> eventsSubmitter.apply(state)).when(subscription).request(1);
+    doAnswer(a -> eventsSubmitter.apply(state)).when(subscription).request(anyLong());
     subscriber.onSubscribe(subscription);
   }
 
@@ -170,11 +171,13 @@ public class KinesisClientProxyStub implements AsyncClientProxy {
     Stream<SubscribeToShardEvent> recordsWithData =
         IntStream.range(0, numberOfEvents)
             .mapToObj(
-                i ->
-                    SubscribeToShardEvent.builder()
-                        .records(createRecord(sequenceNumber))
-                        .continuationSequenceNumber(String.valueOf(i))
-                        .build());
+                i -> {
+                  Integer sn = sequenceNumber.incrementAndGet();
+                  return SubscribeToShardEvent.builder()
+                      .records(createRecord(sn))
+                      .continuationSequenceNumber(sn.toString())
+                      .build();
+                });
 
     Stream<SubscribeToShardEvent> recordsWithOutData =
         IntStream.range(0, numberOfEvents)
@@ -182,7 +185,8 @@ public class KinesisClientProxyStub implements AsyncClientProxy {
                 i ->
                     SubscribeToShardEvent.builder()
                         .records(ImmutableList.of())
-                        .continuationSequenceNumber(String.valueOf(i))
+                        .continuationSequenceNumber(
+                            String.valueOf(sequenceNumber.incrementAndGet()))
                         .build());
 
     return Stream.concat(recordsWithData, recordsWithOutData).collect(Collectors.toList());

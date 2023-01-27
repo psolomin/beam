@@ -25,8 +25,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Creates {@link KinesisReaderCheckpoint} when stored checkpoint is not available or outdated. List
- * of shards is obtained from Kinesis. The result of calling {@link #generate(ClientBuilder)} will
- * depend on {@link StartingPoint} provided.
+ * of shards is obtained from Kinesis. The result of calling {@link #generate(AsyncClientProxy)}
+ * will depend on {@link StartingPoint} provided.
  */
 class FromScratchCheckpointGenerator implements CheckpointGenerator {
 

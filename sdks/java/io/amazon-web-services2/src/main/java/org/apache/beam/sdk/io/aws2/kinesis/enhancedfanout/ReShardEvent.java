@@ -15,41 +15,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals;
+package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import java.util.List;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 
-public class ReShardSignal implements ShardSubscriberSignal {
-  private final String senderId;
-  private final String continuationSequenceNumber;
+public class ReShardEvent extends ShardEventAbs {
   private final List<ChildShard> childShards;
 
-  ReShardSignal(String senderId, String continuationSequenceNumber, List<ChildShard> childShards) {
-    this.senderId = senderId;
-    this.continuationSequenceNumber = continuationSequenceNumber;
+  private ReShardEvent(String shardId, List<ChildShard> childShards) {
+    super(shardId, ShardEventType.RE_SHARD);
     this.childShards = childShards;
   }
 
-  public static ReShardSignal fromShardEvent(String senderId, ShardEventWrapper event) {
-    return new ReShardSignal(
-        senderId,
-        event.getWrappedEvent().continuationSequenceNumber(),
-        event.getWrappedEvent().childShards());
+  public static boolean isReShard(SubscribeToShardEvent event) {
+    return event.continuationSequenceNumber() == null && event.hasChildShards();
   }
 
-  @Override
-  public String getSenderId() {
-    return senderId;
-  }
-
-  @Override
-  public String toString() {
-    return "ReShardSignal{" + "senderId='" + senderId + '\'' + ", childShards=" + childShards + '}';
-  }
-
-  public String getContinuationSequenceNumber() {
-    return continuationSequenceNumber;
+  public static ReShardEvent fromNext(String shardId, SubscribeToShardEvent event) {
+    return new ReShardEvent(shardId, event.childShards());
   }
 
   public List<ChildShard> getChildShards() {

@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
+package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.checkerframework.checker.nullness.qual.Nullable;

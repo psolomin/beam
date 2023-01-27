@@ -96,7 +96,7 @@ public class KinesisEnhancedFanOutSource
         builderFactory
             .create(
                 KinesisAsyncClient.builder(),
-                Checkers.checkNotNull(readSpec.getClientConfiguration(), "clientConfiguration"),
+                checkNotNull(readSpec.getClientConfiguration(), "clientConfiguration"),
                 null) // builderFactory already created with AwsOptions
             .build());
   }

@@ -60,7 +60,7 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
   public boolean start() throws IOException {
     LOG.info("Starting reader using {}", checkpointGenerator);
     try {
-      ShardSubscribersPool pool = createPool();
+      ShardSubscribersPoolImpl pool = createPool();
       boolean isRunning = pool.start();
       shardSubscribersPool = CustomOptional.of(pool);
       return isRunning && advance(); // should return false if no input is currently available
@@ -121,11 +121,8 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
     return source;
   }
 
-  private ShardSubscribersPool createPool() throws TransientKinesisException {
+  private ShardSubscribersPoolImpl createPool() throws TransientKinesisException {
     KinesisReaderCheckpoint initialCheckpoint = checkpointGenerator.generate(kinesis);
-    ShardSubscribersPoolState shardSubscribersPoolState =
-        new ShardSubscribersPoolStateImpl(config, initialCheckpoint);
-    RecordsBuffer recordsBuffer = new RecordsBufferImpl(config, shardSubscribersPoolState);
-    return new ShardSubscribersPoolImpl(config, kinesis, shardSubscribersPoolState, recordsBuffer);
+    return new ShardSubscribersPoolImpl(config, kinesis, initialCheckpoint);
   }
 }

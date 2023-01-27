@@ -15,11 +15,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
+package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-public enum ShardEventType {
-  RECORDS,
-  SUBSCRIPTION_COMPLETE,
-  RE_SHARD,
-  ERROR
+public class CriticalConsumerError extends ConsumerError {
+  public CriticalConsumerError(Throwable cause) {
+    super(cause);
+  }
 }

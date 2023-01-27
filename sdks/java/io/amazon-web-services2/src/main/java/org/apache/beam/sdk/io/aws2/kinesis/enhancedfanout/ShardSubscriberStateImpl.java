@@ -15,10 +15,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-/** Transforms for reading from Amazon Kinesis with Enhanced Fan-Out Consumers. */
-@Experimental(Kind.SOURCE_SINK)
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-import org.apache.beam.sdk.annotations.Experimental;
-import org.apache.beam.sdk.annotations.Experimental.Kind;
+public class ShardSubscriberStateImpl implements ShardSubscriberState {
+  private final KinesisShardEventsSubscriber subscriber;
+  private ShardCheckpoint shardCheckpoint;
+
+  public ShardSubscriberStateImpl(
+      KinesisShardEventsSubscriber subscriber, ShardCheckpoint initialCheckpoint) {
+    this.subscriber = subscriber;
+    this.shardCheckpoint = initialCheckpoint;
+  }
+
+  @Override
+  public void requestRecords(long n) {
+    subscriber.requestRecords(n);
+  }
+
+  @Override
+  public void ackRecord(ExtendedKinesisRecord record) {
+    shardCheckpoint = shardCheckpoint.moveAfter(record.getContinuationSequenceNumber());
+  }
+
+  @Override
+  public ShardCheckpoint getCheckpoint() {
+    return shardCheckpoint;
+  }
+
+  @Override
+  public void cancel() {
+    subscriber.cancel();
+  }
+}

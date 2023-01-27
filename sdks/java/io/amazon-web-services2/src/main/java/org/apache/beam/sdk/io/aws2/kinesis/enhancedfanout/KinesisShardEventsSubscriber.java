@@ -17,11 +17,8 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
-import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals.ShardEventWrapper;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
@@ -33,24 +30,24 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHan
 class KinesisShardEventsSubscriber implements Subscriber<SubscribeToShardEventStream> {
   private static final Logger LOG = LoggerFactory.getLogger(KinesisShardEventsSubscriber.class);
   private static final String LOG_MSG_TEMPLATE = "Stream = {} consumer = {} shard = {}";
-  private static final long enqueueTimeoutMs = 35_000;
 
-  private final BlockingQueue<ShardEventWrapper> queue;
+  private final ShardSubscribersPoolImpl pool;
   private final CountDownLatch isRunningLatch;
   private final String streamName;
   private final String consumerArn;
   private final String shardId;
 
-  private CustomOptional<Subscription> s = CustomOptional.absent();
+  private @Nullable Subscription s;
+  private volatile boolean decommissioned = false;
   private volatile boolean cancelled = false;
 
   KinesisShardEventsSubscriber(
-      BlockingQueue<ShardEventWrapper> queue,
+      ShardSubscribersPoolImpl pool,
       CountDownLatch isRunningLatch,
       String streamName,
       String consumerArn,
       String shardId) {
-    this.queue = queue;
+    this.pool = pool;
     this.isRunningLatch = isRunningLatch;
     this.streamName = streamName;
     this.consumerArn = consumerArn;
@@ -59,7 +56,7 @@ class KinesisShardEventsSubscriber implements Subscriber<SubscribeToShardEventSt
 
   @Override
   public void onSubscribe(Subscription subscription) {
-    s = CustomOptional.of(subscription);
+    s = subscription;
     isRunningLatch.countDown();
   }
 
@@ -70,30 +67,37 @@ class KinesisShardEventsSubscriber implements Subscriber<SubscribeToShardEventSt
         new SubscribeToShardResponseHandler.Visitor() {
           @Override
           public void visit(SubscribeToShardEvent event) {
-            enqueueEvent(ShardEventWrapper.fromNext(event));
+            if (!ReShardEvent.isReShard(event)) {
+              pushEvent(RecordsShardEvent.fromNext(streamName, shardId, event));
+            } else {
+              pushEvent(ReShardEvent.fromNext(shardId, event));
+            }
           }
         });
   }
 
   @Override
   public void onError(Throwable throwable) {
-    enqueueEvent(ShardEventWrapper.error(throwable));
+    pushEvent(ErrorShardEvent.fromErr(shardId, throwable));
     cancel();
   }
 
   /**
    * AWS SDK Netty thread calls this every ~ 5 minutes, these events alone are not enough signal to
    * conclude the shard has no more records to consume.
+   *
+   * <p>Not that it is also called after a re-shard event handled by {@link
+   * #onNext(SubscribeToShardEventStream)}.
    */
   @Override
   public void onComplete() {
     LOG.info(LOG_MSG_TEMPLATE + " Complete", streamName, shardId, consumerArn);
-    enqueueEvent(ShardEventWrapper.subscriptionComplete());
+    pushEvent(SubscriptionCompleteShardEvent.create(shardId));
   }
 
-  void requestRecord() {
-    if (!cancelled) {
-      s.get().request(1);
+  void requestRecords(long n) {
+    if (!cancelled && s != null) {
+      s.request(n);
     }
   }
 
@@ -104,19 +108,22 @@ class KinesisShardEventsSubscriber implements Subscriber<SubscribeToShardEventSt
     cancelled = true;
 
     if (s != null) {
-      s.get().cancel();
+      s.cancel();
     }
   }
 
-  private void enqueueEvent(ShardEventWrapper event) {
+  private void pushEvent(ShardEvent event) {
+    LOG.info("Got event {}", event);
     if (cancelled) {
       return;
     }
 
     try {
-      if (!queue.offer(event, enqueueTimeoutMs, TimeUnit.MILLISECONDS)) {
-        String template = LOG_MSG_TEMPLATE + " Queue wait time exceeded max {} ms";
-        LOG.error(template, streamName, consumerArn, shardId, enqueueTimeoutMs);
+      if (!decommissioned) {
+        pool.handleEvent(event);
+      }
+      if (event.getType().equals(ShardEventType.RE_SHARD)) {
+        decommissioned = true;
       }
     } catch (InterruptedException e) {
       LOG.error("Interrupted while trying to enqueue event");

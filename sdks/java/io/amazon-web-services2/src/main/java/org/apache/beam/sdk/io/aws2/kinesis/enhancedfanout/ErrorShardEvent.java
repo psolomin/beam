@@ -15,30 +15,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
+package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
+public class ErrorShardEvent extends ShardEventAbs {
+  private final Throwable err;
 
-/**
- * Always returns injected checkpoint. Used when stored checkpoint exists. TODO: add validation to
- * check if stored checkpoint is "rotten"?
- */
-class StaticCheckpointGenerator implements CheckpointGenerator {
-
-  private final KinesisReaderCheckpoint checkpoint;
-
-  public StaticCheckpointGenerator(KinesisReaderCheckpoint checkpoint) {
-    checkNotNull(checkpoint, "checkpoint");
-    this.checkpoint = checkpoint;
+  private ErrorShardEvent(String shardId, Throwable err) {
+    super(shardId, ShardEventType.ERROR);
+    this.err = err;
   }
 
-  @Override
-  public KinesisReaderCheckpoint generate(AsyncClientProxy kinesis) {
-    return checkpoint;
+  public static ErrorShardEvent fromErr(String shardId, Throwable err) {
+    return new ErrorShardEvent(shardId, err);
   }
 
-  @Override
-  public String toString() {
-    return checkpoint.toString();
+  public Throwable getErr() {
+    return err;
   }
 }

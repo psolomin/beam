@@ -15,14 +15,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
+package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-public class SubscriptionCompleteShardEvent extends ShardEventAbs {
-  private SubscriptionCompleteShardEvent(String shardId) {
-    super(shardId, ShardEventType.SUBSCRIPTION_COMPLETE);
+import io.netty.handler.timeout.ReadTimeoutException;
+
+public class ConsumerError extends Exception {
+  public ConsumerError(Throwable cause) {
+    super(cause);
   }
 
-  public static SubscriptionCompleteShardEvent create(String shardId) {
-    return new SubscriptionCompleteShardEvent(shardId);
+  public static ConsumerError toConsumerError(Throwable e) {
+    if (e instanceof ReadTimeoutException) {
+      return new RecoverableConsumerError(e);
+    } else {
+      return new CriticalConsumerError(e);
+    }
   }
 }
