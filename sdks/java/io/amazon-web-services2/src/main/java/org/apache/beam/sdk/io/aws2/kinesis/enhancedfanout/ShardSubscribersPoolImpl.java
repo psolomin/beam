@@ -262,7 +262,9 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
         } else {
           return CustomOptional.absent();
         }
-      } else return CustomOptional.absent();
+      } else {
+        return CustomOptional.absent();
+      }
     } catch (InterruptedException e) {
       return CustomOptional.absent();
     }
