@@ -27,9 +27,11 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
+import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
@@ -37,7 +39,7 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 import software.amazon.kinesis.common.InitialPositionInStream;
 
-public class ShardSubscribersPoolImpl {
+public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
   private static final Logger LOG = LoggerFactory.getLogger(ShardSubscribersPoolImpl.class);
   private static final int BUFFER_SIZE = 10_000;
   private static final int TARGET_MIN_REMAINING_CAPACITY = BUFFER_SIZE / 5;
@@ -62,6 +64,7 @@ public class ShardSubscribersPoolImpl {
     this.eventsBuffer = new LinkedBlockingQueue<>(BUFFER_SIZE);
   }
 
+  @Override
   public boolean start() {
     // TODO: handle different types of start:
     // ShardIteratorType.LATEST
@@ -80,6 +83,7 @@ public class ShardSubscribersPoolImpl {
     return true;
   }
 
+  @Override
   public boolean stop() {
     shardsStates.values().forEach(ShardSubscriberState::cancel);
     subscriptionFutures.values().forEach(f -> f.cancel(false));
@@ -238,6 +242,7 @@ public class ShardSubscribersPoolImpl {
     return f;
   }
 
+  @Override
   public CustomOptional<KinesisRecord> nextRecord() {
     try {
       ExtendedKinesisRecord maybeRecord =
@@ -260,5 +265,20 @@ public class ShardSubscribersPoolImpl {
     } catch (InterruptedException e) {
       return CustomOptional.absent();
     }
+  }
+
+  @Override
+  public Instant getWatermark() {
+    return Instant.EPOCH;
+  }
+
+  @Override
+  public KinesisReaderCheckpoint getCheckpointMark() {
+    List<ShardCheckpoint> checkpoints =
+        shardsStates.values().stream()
+            .map(ShardSubscriberState::getCheckpoint)
+            .collect(Collectors.toList());
+
+    return new KinesisReaderCheckpoint(checkpoints);
   }
 }
