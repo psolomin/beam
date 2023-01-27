@@ -20,16 +20,14 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2.helpers;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.time.Instant;
-import java.util.concurrent.atomic.AtomicInteger;
 import software.amazon.awssdk.core.SdkBytes;
 
 public class RecordsGenerators {
-  static software.amazon.awssdk.services.kinesis.model.Record createRecord(
-      AtomicInteger sequenceNumber) {
+  static software.amazon.awssdk.services.kinesis.model.Record createRecord(Integer sequenceNumber) {
     return software.amazon.awssdk.services.kinesis.model.Record.builder()
         .partitionKey("foo")
         .approximateArrivalTimestamp(Instant.now())
-        .sequenceNumber(String.valueOf(sequenceNumber.incrementAndGet()))
+        .sequenceNumber(String.valueOf(sequenceNumber))
         .data(SdkBytes.fromByteArray(sequenceNumber.toString().getBytes(UTF_8)))
         .build();
   }

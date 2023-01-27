@@ -85,6 +85,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
 
   @Override
   public boolean stop() {
+    LOG.info("Stopping pool {} {}", config.getStreamName(), config.getConsumerArn());
     shardsStates.values().forEach(ShardSubscriberState::cancel);
     subscriptionFutures.values().forEach(f -> f.cancel(false));
     return true;
