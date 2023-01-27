@@ -17,204 +17,149 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.Checkers.checkNotNull;
-
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
-import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals.CriticalErrorSignal;
-import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals.ReShardSignal;
-import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals.ShardEventWrapper;
-import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.signals.ShardSubscriberSignal;
-import org.checkerframework.checker.nullness.qual.NonNull;
+import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
+import software.amazon.kinesis.common.InitialPositionInStream;
 
-public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable {
+public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
   private static final Logger LOG = LoggerFactory.getLogger(ShardSubscribersPoolImpl.class);
-  private static final String LOG_MSG_TEMPLATE = "Stream = {} consumer = {}";
+  private static final int BUFFER_SIZE = 10_000;
+  private static final int TARGET_MIN_REMAINING_CAPACITY = BUFFER_SIZE / 5;
+  private static final long INITIAL_DEMAND_PER_SHARD = 2L;
+  private static final long BUFFER_POLL_WAIT_MS = 1_000L;
+  private static final long ENQUEUE_TIMEOUT_MS = 3_000;
 
   private final Config config;
   private final AsyncClientProxy kinesis;
-  private final ExecutorService executorService;
-  private final BlockingQueue<ShardSubscriberSignal> signals;
-  private final AtomicBoolean isRunning = new AtomicBoolean(false);
-  private final CountDownLatch consumerStartedLatch;
-  private final RecordsBuffer recordsBuffer;
-  private final Map<String, ShardSubscriber> shardSubscribers = new ConcurrentHashMap<>();
-  private final ShardSubscribersPoolState state;
+  private final KinesisReaderCheckpoint initialCheckpoint;
+  private final ConcurrentMap<String, ShardSubscriberState> shardsStates;
+  private final ConcurrentMap<String, CompletableFuture<Void>> subscriptionFutures;
+  private final BlockingQueue<ExtendedKinesisRecord> eventsBuffer;
 
-  ShardSubscribersPoolImpl(
-      Config config,
-      AsyncClientProxy kinesis,
-      ShardSubscribersPoolState initialState,
-      RecordsBuffer recordsBuffer) {
+  public ShardSubscribersPoolImpl(
+      Config config, AsyncClientProxy kinesis, KinesisReaderCheckpoint initialCheckpoint) {
     this.config = config;
     this.kinesis = kinesis;
-    this.recordsBuffer = recordsBuffer;
-    this.executorService = createThreadPool(config);
-    this.state = initialState;
-    this.consumerStartedLatch = new CountDownLatch(1);
-    this.signals = new LinkedBlockingQueue<>(config.getPoolSignalsQueueCapacity());
+    this.initialCheckpoint = initialCheckpoint;
+    this.shardsStates = new ConcurrentHashMap<>();
+    this.subscriptionFutures = new ConcurrentHashMap<>();
+    this.eventsBuffer = new LinkedBlockingQueue<>(BUFFER_SIZE);
   }
 
   @Override
   public boolean start() {
-    String coordinatorName =
-        String.format(
-            "shard-subscribers-pool-%s-%s", config.getStreamName(), config.getConsumerArn());
-    Thread t = new Thread(this, coordinatorName);
-    t.setDaemon(true);
-    t.start();
-    try {
-      if (consumerStartedLatch.await(config.getPoolStartTimeoutMs(), TimeUnit.MILLISECONDS)) {
-        return true;
-      } else {
-        throw new RuntimeException(
-            String.format("Did not start within %s ms", config.getPoolStartTimeoutMs()));
-      }
-    } catch (InterruptedException e) {
-      throw new RuntimeException("Interrupted while waiting to start");
-    }
+    // TODO: handle different types of start:
+    // ShardIteratorType.LATEST
+    // ShardIteratorType.AT_SEQUENCE_NUMBER
+    // ShardIteratorType.TRIM_HORIZON
+    // ShardIteratorType.AT_TIMESTAMP
+    // AT_SEQUENCE_NUMBER:
+    // - check if we have seen this seq number before
+    // - check if we have seen a sub-sequence number before
+
+    initialCheckpoint.forEach(
+        shardCheckpoint ->
+            subscriptionFutures.put(
+                shardCheckpoint.getShardId(),
+                createSubscription(shardCheckpoint.getShardId(), shardCheckpoint, true)));
+    return true;
   }
 
   @Override
   public boolean stop() {
-    initiateGracefulShutdown();
-    return awaitTermination();
+    LOG.info("Stopping pool {} {}", config.getStreamName(), config.getConsumerArn());
+    shardsStates.values().forEach(ShardSubscriberState::cancel);
+    subscriptionFutures.values().forEach(f -> f.cancel(false));
+    return true;
   }
 
-  @Override
-  public boolean isRunning() {
-    return isRunning.get();
-  }
-
-  @Override
-  public void sendReShardSignal(String shardId, ShardEventWrapper event) {
-    LOG.info("Re-shard event from {}.", shardId);
-    ReShardSignal signal = ReShardSignal.fromShardEvent(shardId, event);
-    pushSignal(signal);
-  }
-
-  @Override
-  public void sendShardErrorSignal(String shardId, ShardEventWrapper event) {
-    LOG.warn("Error event from {}", shardId, event.getError());
-    CriticalErrorSignal signal = CriticalErrorSignal.fromError(shardId, event);
-    pushSignal(signal);
-  }
-
-  @Override
-  public CustomOptional<KinesisRecord> nextRecord() {
-    // TODO: handle this in nicer way
-    CustomOptional<Record> maybeRecord = recordsBuffer.fetchOne();
-    if (maybeRecord.isPresent() && maybeRecord.get().getKinesisRecord().isPresent()) {
-      return CustomOptional.of(maybeRecord.get().getKinesisRecord().get());
-    } else {
-      return CustomOptional.absent();
-    }
-  }
-
-  @Override
-  public Instant getWatermark() {
-    return state.getWatermark();
-  }
-
-  @Override
-  public KinesisReaderCheckpoint getCheckpointMark() {
-    return state.getCheckpointMark();
-  }
-
-  private static ExecutorService createThreadPool(Config config) {
-    return Executors.newCachedThreadPool(
-        new ThreadFactory() {
-          private final AtomicLong threadCount = new AtomicLong(0);
-
-          @Override
-          public Thread newThread(@NonNull Runnable runnable) {
-            String name =
-                String.format(
-                    "shard-consumer-%s-%s-%s",
-                    threadCount.getAndIncrement(), config.getStreamName(), config.getConsumerArn());
-            Thread thread = new Thread(runnable, name);
-            thread.setDaemon(true);
-            return thread;
-          }
-        });
-  }
-
-  @Override
-  public void run() {
-    isRunning.set(true);
-    LOG.info(LOG_MSG_TEMPLATE + " Started", config.getStreamName(), config.getConsumerArn());
-    createAndSubmitSubscribers();
-    consumerStartedLatch.countDown();
-
-    while (isRunning.get()) {
-      try {
-        ShardSubscriberSignal signal =
-            signals.poll(config.getPoolSignalsPollTimeoutMs(), TimeUnit.MILLISECONDS);
-        if (signal != null) {
-          if (signal instanceof ReShardSignal) {
-            processReShardSignal((ReShardSignal) signal);
-          }
-          if (signal instanceof CriticalErrorSignal) {
-            processCriticalError((CriticalErrorSignal) signal);
-          }
-        } else {
-          LOG.info("No re-shard events to handle");
-        }
-      } catch (InterruptedException e) {
-        LOG.warn("Failed to take re-shard signal from queue. ", e);
-      }
-    }
-  }
-
+  /**
+   * This is ultimately called by Netty threads via {@link KinesisShardEventsSubscriber} callbacks.
+   *
+   * @param event
+   * @throws InterruptedException
+   */
   @SuppressWarnings("FutureReturnValueIgnored")
-  private void createAndSubmitSubscribers() {
-    // FIXME: if future completes with unrecoverable error, entire reader should fail
-    KinesisReaderCheckpoint initialCheckpoint = state.getCheckpointMark();
-    initialCheckpoint
-        .iterator()
-        .forEachRemaining(
-            shardCheckpoint -> {
-              ShardSubscriber s =
-                  new ShardSubscriberImpl(
-                      config, shardCheckpoint.getShardId(), kinesis, this, state, recordsBuffer);
-              shardSubscribers.put(shardCheckpoint.getShardId(), s);
-              executorService.submit(s);
+  public void handleEvent(ShardEvent event) throws InterruptedException {
+    switch (event.getType()) {
+      case SUBSCRIPTION_COMPLETE:
+        CompletableFuture.runAsync(
+            () -> {
+              ShardSubscriberState state = shardsStates.get(event.getShardId());
+              if (state != null) {
+                subscriptionFutures.computeIfPresent(
+                    event.getShardId(),
+                    (k, v) -> createSubscription(k, state.getCheckpoint(), false));
+              }
             });
+        break;
+      case RE_SHARD:
+        CompletableFuture.runAsync(
+            () -> {
+              List<String> successorShards = computeSuccessorShardsIds((ReShardEvent) event);
+              successorShards.forEach(
+                  successorShardId -> {
+                    ShardCheckpoint newCheckpoint =
+                        new ShardCheckpoint(
+                            config.getStreamName(),
+                            config.getConsumerArn(),
+                            successorShardId,
+                            new StartingPoint(InitialPositionInStream.TRIM_HORIZON));
+                    subscriptionFutures.computeIfAbsent(
+                        successorShardId,
+                        shardId -> createSubscription(shardId, newCheckpoint, false));
+                  });
+            });
+        break;
+      case RECORDS:
+        List<ExtendedKinesisRecord> records = ((RecordsShardEvent) event).getRecords();
+        for (ExtendedKinesisRecord record : records) {
+          if (!eventsBuffer.offer(record, ENQUEUE_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+            // We should never demand more than we consume.
+            throw new RuntimeException("This should never happen");
+          }
+        }
+        break;
+      case ERROR:
+
+      default:
+        LOG.warn("Unknown event type {}", event.getType());
+    }
   }
 
-  @SuppressWarnings("FutureReturnValueIgnored")
-  private void processReShardSignal(ReShardSignal reShardSignal) throws InterruptedException {
+  private static List<String> computeSuccessorShardsIds(ReShardEvent event) {
     // FIXME: If future completes with unrecoverable error, entire reader should fail
     // FIXME: Down-sharding can cause shards to be "lost"! Re-visit this logic!
-    LOG.info("Processing re-shard signal {}", reShardSignal);
+    LOG.info("Processing re-shard signal {}", event);
 
     List<String> successorShardsIds = new ArrayList<>();
 
-    for (ChildShard childShard : reShardSignal.getChildShards()) {
-      if (childShard.parentShards().contains(reShardSignal.getSenderId())) {
+    for (ChildShard childShard : event.getChildShards()) {
+      if (childShard.parentShards().contains(event.getShardId())) {
         if (childShard.parentShards().size() > 1) {
           // This is the case of merging two shards into one.
           // when there are 2 parent shards, we only pick it up if
           // its max shard equals to sender shard ID
           String maxId = childShard.parentShards().stream().max(String::compareTo).get();
-          if (reShardSignal.getSenderId().equals(maxId)) {
+          if (event.getShardId().equals(maxId)) {
             successorShardsIds.add(childShard.shardId());
           }
         } else {
@@ -224,91 +169,117 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool, Runnable 
       }
     }
 
-    checkNotNull(shardSubscribers.get(reShardSignal.getSenderId()), reShardSignal.getSenderId())
-        .stop();
-    shardSubscribers.remove(reShardSignal.getSenderId());
-
     if (successorShardsIds.isEmpty()) {
-      LOG.info("Found no successors for shard {}", reShardSignal.getSenderId());
-      // at this point, current split pool can end up without shards at all.
-      if (shardSubscribers.size() == 0) {
-        LOG.info("Pool doesn't have shards after processing {}. Shutting down.", reShardSignal);
-        initiateGracefulShutdown();
-        return;
-      }
+      LOG.info("Found no successors for shard {}", event.getShardId());
     } else {
-      LOG.info(
-          "Found successors for shard {}: {}", reShardSignal.getSenderId(), successorShardsIds);
+      LOG.info("Found successors for shard {}: {}", event.getShardId(), successorShardsIds);
     }
-    state.applyReShard(reShardSignal.getSenderId(), successorShardsIds);
-    successorShardsIds.forEach(
-        childShardId -> {
-          ShardSubscriber s =
-              new ShardSubscriberImpl(config, childShardId, kinesis, this, state, recordsBuffer);
-          ShardSubscriber previous = shardSubscribers.putIfAbsent(childShardId, s);
-          if (previous != null) {
-            throw new RuntimeException(String.format("Shard %s already registered", childShardId));
-          }
-          executorService.submit(s);
-        });
+    return successorShardsIds;
   }
 
-  private void processCriticalError(CriticalErrorSignal criticalErrorSignal) {
-    LOG.error("Processing unrecoverable error signal shard {}", criticalErrorSignal);
-    initiateGracefulShutdown();
-  }
+  private CompletableFuture<Void> createSubscription(
+      String shardId, ShardCheckpoint checkpoint, boolean isInitial) {
+    UUID subscribeRequestId = UUID.randomUUID();
+    SubscribeToShardRequest request =
+        SubscribeToShardRequest.builder()
+            .consumerARN(config.getConsumerArn())
+            .shardId(shardId)
+            .startingPosition(checkpoint.toStartingPosition())
+            .build();
 
-  private void initiateGracefulShutdown() {
-    LOG.info(
-        LOG_MSG_TEMPLATE + " Initiating shutdown", config.getStreamName(), config.getConsumerArn());
-    isRunning.set(false);
-    try {
-      try {
-        cleanUpResources();
-      } catch (Exception e) {
-        LOG.warn(
-            LOG_MSG_TEMPLATE + " Error while cleaning up.",
+    LOG.info("Starting subscribe request {} - {}", subscribeRequestId, request);
+
+    CountDownLatch eventsHandlerReadyLatch = new CountDownLatch(1);
+
+    KinesisShardEventsSubscriber shardEventsSubscriber =
+        new KinesisShardEventsSubscriber(
+            this,
+            eventsHandlerReadyLatch,
             config.getStreamName(),
             config.getConsumerArn(),
-            e);
-      }
-    } finally {
-      executorService.shutdown();
-    }
+            shardId);
 
-    LOG.info(
-        LOG_MSG_TEMPLATE + " Shutdown complete", config.getStreamName(), config.getConsumerArn());
-  }
+    ShardSubscriberState shardState =
+        new ShardSubscriberStateImpl(shardEventsSubscriber, checkpoint);
 
-  private boolean awaitTermination() {
+    SubscribeToShardResponseHandler responseHandler =
+        SubscribeToShardResponseHandler.builder()
+            .onError(
+                e ->
+                    LOG.error(
+                        "Failed to execute subscribe request {} - {}",
+                        subscribeRequestId,
+                        request,
+                        e))
+            .subscriber(() -> shardEventsSubscriber)
+            .build();
+
+    CompletableFuture<Void> f = kinesis.subscribeToShard(request, responseHandler);
+    boolean subscriptionWasEstablished = false;
     try {
-      boolean isTerminated =
-          executorService.awaitTermination(
-              config.getPoolAwaitTerminationTimeoutMs(), TimeUnit.MILLISECONDS);
-      if (!isTerminated) {
-        LOG.warn("Unable to gracefully shut down");
-      }
-      return isTerminated;
+      subscriptionWasEstablished =
+          eventsHandlerReadyLatch.await(config.getPoolStartTimeoutMs(), TimeUnit.MILLISECONDS);
     } catch (InterruptedException e) {
-      LOG.warn("Interrupted while shutting down");
+      // handled below
     }
-    return false;
-  }
 
-  void cleanUpResources() {
-    shardSubscribers.forEach((k, v) -> v.stop());
-  }
-
-  private void pushSignal(ShardSubscriberSignal signal) {
-    try {
-      if (!signals.offer(signal, config.getPoolSignalsOfferTimeoutMs(), TimeUnit.MILLISECONDS)) {
+    if (!subscriptionWasEstablished) {
+      LOG.error("Subscribe request {} failed.", subscribeRequestId);
+      if (!f.isCompletedExceptionally()) {
         LOG.warn(
-            "Error event from {} was not pushed to the queue, timeout after {}ms",
-            signal,
-            config.getPoolSignalsOfferTimeoutMs());
+            "subscribeToShard request {} failed, but future was not complete.", subscribeRequestId);
       }
-    } catch (InterruptedException e) {
-      LOG.warn("Error event from {} was not pushed to the queue.", signal.getSenderId(), e);
+      shardState.cancel();
+      throw new RuntimeException();
     }
+
+    if (isInitial) {
+      shardState.requestRecords(INITIAL_DEMAND_PER_SHARD);
+    } else {
+      shardState.requestRecords(1L);
+    }
+    shardsStates.put(shardId, shardState);
+    LOG.info("Subscription for shard {} established", shardId);
+    return f;
+  }
+
+  @Override
+  public CustomOptional<KinesisRecord> nextRecord() {
+    try {
+      ExtendedKinesisRecord maybeRecord =
+          eventsBuffer.poll(BUFFER_POLL_WAIT_MS, TimeUnit.MILLISECONDS);
+      if (maybeRecord != null) {
+        ShardSubscriberState shardState = shardsStates.get(maybeRecord.getShardId());
+        if (shardState != null) {
+          shardState.ackRecord(maybeRecord);
+          if (eventsBuffer.remainingCapacity() > TARGET_MIN_REMAINING_CAPACITY) {
+            shardState.requestRecords(1L);
+          }
+        }
+        KinesisRecord record = maybeRecord.getKinesisRecord();
+        if (record != null) {
+          return CustomOptional.of(record);
+        } else {
+          return CustomOptional.absent();
+        }
+      } else return CustomOptional.absent();
+    } catch (InterruptedException e) {
+      return CustomOptional.absent();
+    }
+  }
+
+  @Override
+  public Instant getWatermark() {
+    return Instant.EPOCH;
+  }
+
+  @Override
+  public KinesisReaderCheckpoint getCheckpointMark() {
+    List<ShardCheckpoint> checkpoints =
+        shardsStates.values().stream()
+            .map(ShardSubscriberState::getCheckpoint)
+            .collect(Collectors.toList());
+
+    return new KinesisReaderCheckpoint(checkpoints);
   }
 }

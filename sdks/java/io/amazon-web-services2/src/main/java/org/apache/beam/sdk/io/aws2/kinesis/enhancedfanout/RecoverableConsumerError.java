@@ -15,17 +15,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
+package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-import java.util.concurrent.CompletableFuture;
-import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
-import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
-import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
-import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
-
-public interface AsyncClientProxy extends AutoCloseable {
-  CompletableFuture<ListShardsResponse> listShards(ListShardsRequest listShardsRequest);
-
-  CompletableFuture<Void> subscribeToShard(
-      SubscribeToShardRequest request, SubscribeToShardResponseHandler responseHandler);
+public class RecoverableConsumerError extends ConsumerError {
+  public RecoverableConsumerError(Throwable cause) {
+    super(cause);
+  }
 }

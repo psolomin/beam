@@ -15,10 +15,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout2;
+package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-public class RecoverableConsumerError extends ConsumerError {
-  public RecoverableConsumerError(Throwable cause) {
-    super(cause);
+public abstract class ShardEventAbs implements ShardEvent {
+  private final String shardId;
+  private final ShardEventType type;
+
+  protected ShardEventAbs(String shardId, ShardEventType type) {
+    this.shardId = shardId;
+    this.type = type;
+  }
+
+  @Override
+  public String getShardId() {
+    return shardId;
+  }
+
+  @Override
+  public ShardEventType getType() {
+    return type;
+  }
+
+  @Override
+  public String toString() {
+    return "ShardEvent{" + "shardId='" + shardId + '\'' + ", type=" + type + '}';
   }
 }
