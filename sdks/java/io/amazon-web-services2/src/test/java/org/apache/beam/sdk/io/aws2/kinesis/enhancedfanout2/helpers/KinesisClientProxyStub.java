@@ -171,11 +171,13 @@ public class KinesisClientProxyStub implements AsyncClientProxy {
     Stream<SubscribeToShardEvent> recordsWithData =
         IntStream.range(0, numberOfEvents)
             .mapToObj(
-                i ->
-                    SubscribeToShardEvent.builder()
-                        .records(createRecord(sequenceNumber))
-                        .continuationSequenceNumber(String.valueOf(i))
-                        .build());
+                i -> {
+                  Integer sn = sequenceNumber.incrementAndGet();
+                  return SubscribeToShardEvent.builder()
+                      .records(createRecord(sn))
+                      .continuationSequenceNumber(sn.toString())
+                      .build();
+                });
 
     Stream<SubscribeToShardEvent> recordsWithOutData =
         IntStream.range(0, numberOfEvents)
@@ -183,7 +185,8 @@ public class KinesisClientProxyStub implements AsyncClientProxy {
                 i ->
                     SubscribeToShardEvent.builder()
                         .records(ImmutableList.of())
-                        .continuationSequenceNumber(String.valueOf(i))
+                        .continuationSequenceNumber(
+                            String.valueOf(sequenceNumber.incrementAndGet()))
                         .build());
 
     return Stream.concat(recordsWithData, recordsWithOutData).collect(Collectors.toList());
