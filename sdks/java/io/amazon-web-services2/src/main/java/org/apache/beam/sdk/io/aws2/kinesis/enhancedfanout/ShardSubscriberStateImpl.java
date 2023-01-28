@@ -17,9 +17,16 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
+import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
+import org.apache.beam.sdk.io.aws2.kinesis.WatermarkPolicy;
+import org.apache.beam.sdk.io.aws2.kinesis.WatermarkPolicyFactory;
+import org.joda.time.Instant;
+
 public class ShardSubscriberStateImpl implements ShardSubscriberState {
   private final KinesisShardEventsSubscriber subscriber;
   private ShardCheckpoint shardCheckpoint;
+  private final WatermarkPolicy latestRecordTimestampPolicy =
+      WatermarkPolicyFactory.withArrivalTimePolicy().createWatermarkPolicy();
 
   public ShardSubscriberStateImpl(
       KinesisShardEventsSubscriber subscriber, ShardCheckpoint initialCheckpoint) {
@@ -35,6 +42,10 @@ public class ShardSubscriberStateImpl implements ShardSubscriberState {
   @Override
   public void ackRecord(ExtendedKinesisRecord record) {
     shardCheckpoint = shardCheckpoint.moveAfter(record.getContinuationSequenceNumber());
+    KinesisRecord kinesisRecord = record.getKinesisRecord();
+    if (kinesisRecord != null) {
+      latestRecordTimestampPolicy.update(kinesisRecord);
+    }
   }
 
   @Override
@@ -45,5 +56,10 @@ public class ShardSubscriberStateImpl implements ShardSubscriberState {
   @Override
   public void cancel() {
     subscriber.cancel();
+  }
+
+  @Override
+  public Instant getShardWatermark() {
+    return latestRecordTimestampPolicy.getWatermark();
   }
 }

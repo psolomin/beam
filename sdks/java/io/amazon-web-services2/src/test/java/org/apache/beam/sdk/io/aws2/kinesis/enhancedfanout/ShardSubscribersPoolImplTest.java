@@ -108,7 +108,7 @@ public class ShardSubscribersPoolImplTest {
 
   public static List<KinesisRecord> waitForRecords(ShardSubscribersPoolImpl pool, int expectedCnt) {
     List<KinesisRecord> records = new ArrayList<>();
-    int maxAttempts = expectedCnt * 3;
+    int maxAttempts = expectedCnt * 4;
     int i = 0;
     while (i < maxAttempts) {
       CustomOptional<KinesisRecord> r = pool.nextRecord();
