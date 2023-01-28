@@ -17,6 +17,8 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
+import org.joda.time.Instant;
+
 public interface ShardSubscriberState {
   void requestRecords(long n);
 
@@ -25,4 +27,6 @@ public interface ShardSubscriberState {
   ShardCheckpoint getCheckpoint();
 
   void cancel();
+
+  Instant getShardWatermark();
 }

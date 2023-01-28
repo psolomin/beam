@@ -32,6 +32,7 @@ import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecordCoder;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.kinesis.common.KinesisClientUtil;
 
 public class KinesisEnhancedFanOutSource
     extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoint> {
@@ -95,7 +96,7 @@ public class KinesisEnhancedFanOutSource
     return new AsyncClientProxyImpl(
         builderFactory
             .create(
-                KinesisAsyncClient.builder(),
+                KinesisClientUtil.adjustKinesisClientBuilder(KinesisAsyncClient.builder()),
                 checkNotNull(readSpec.getClientConfiguration(), "clientConfiguration"),
                 null) // builderFactory already created with AwsOptions
             .build());

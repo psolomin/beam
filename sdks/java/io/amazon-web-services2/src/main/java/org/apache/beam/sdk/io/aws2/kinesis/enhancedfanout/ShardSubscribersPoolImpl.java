@@ -18,6 +18,7 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
@@ -31,6 +32,7 @@ import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
+import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -272,7 +274,10 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
 
   @Override
   public Instant getWatermark() {
-    return Instant.EPOCH;
+    return shardsStates.values().stream()
+        .map(ShardSubscriberState::getShardWatermark)
+        .min(Comparator.naturalOrder())
+        .orElse(BoundedWindow.TIMESTAMP_MAX_VALUE);
   }
 
   @Override
