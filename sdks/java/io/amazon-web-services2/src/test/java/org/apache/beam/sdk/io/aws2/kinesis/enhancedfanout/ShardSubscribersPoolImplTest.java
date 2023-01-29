@@ -55,7 +55,7 @@ public class ShardSubscribersPoolImplTest {
             subscribeSeqNumber("shard-000", "18"),
             subscribeSeqNumber("shard-001", "24"));
     assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
-    assertTrue(pool.stop());
+    assertTrue(pool.stop(1L));
   }
 
   @Test
@@ -78,7 +78,7 @@ public class ShardSubscribersPoolImplTest {
             subscribeTrimHorizon("shard-004"),
             subscribeTrimHorizon("shard-005"));
     assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
-    assertTrue(pool.stop());
+    assertTrue(pool.stop(1L));
   }
 
   @Test
@@ -103,7 +103,7 @@ public class ShardSubscribersPoolImplTest {
             subscribeTrimHorizon("shard-005"),
             subscribeTrimHorizon("shard-006"));
     assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
-    assertTrue(pool.stop());
+    assertTrue(pool.stop(1L));
   }
 
   public static List<KinesisRecord> waitForRecords(ShardSubscribersPoolImpl pool, int expectedCnt) {

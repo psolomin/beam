@@ -18,6 +18,7 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -49,6 +50,11 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
   private static final long BUFFER_POLL_WAIT_MS = 1_000L;
   private static final long ENQUEUE_TIMEOUT_MS = 3_000;
 
+  // If you call SubscribeToShard again with the same ConsumerARN and ShardId
+  // within 5 seconds of a successful call, you'll get a ResourceInUseException.
+  private static final long RECONNECT_AFTER_SUCCESS_DELAY_MS = 6_000;
+
+  private final UUID poolId;
   private final Config config;
   private final AsyncClientProxy kinesis;
   private final KinesisReaderCheckpoint initialCheckpoint;
@@ -58,12 +64,18 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
 
   public ShardSubscribersPoolImpl(
       Config config, AsyncClientProxy kinesis, KinesisReaderCheckpoint initialCheckpoint) {
+    this.poolId = UUID.randomUUID();
     this.config = config;
     this.kinesis = kinesis;
     this.initialCheckpoint = initialCheckpoint;
     this.shardsStates = new ConcurrentHashMap<>();
     this.subscriptionFutures = new ConcurrentHashMap<>();
     this.eventsBuffer = new LinkedBlockingQueue<>(BUFFER_SIZE);
+  }
+
+  @Override
+  public UUID getPoolId() {
+    return poolId;
   }
 
   @Override
@@ -77,6 +89,14 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
     // - check if we have seen this seq number before
     // - check if we have seen a sub-sequence number before
 
+    List<String> startingWithShards = checkpointToShardsIds(initialCheckpoint);
+    LOG.info(
+        "Starting pool {} {} {}. Shards = {}",
+        poolId,
+        config.getStreamName(),
+        config.getConsumerArn(),
+        startingWithShards);
+
     initialCheckpoint.forEach(
         shardCheckpoint ->
             subscriptionFutures.put(
@@ -87,9 +107,31 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
 
   @Override
   public boolean stop() {
-    LOG.info("Stopping pool {} {}", config.getStreamName(), config.getConsumerArn());
+    return stop(0L);
+  }
+
+  @Override
+  public boolean stop(long coolDownDelayMs) {
+    KinesisReaderCheckpoint ch = getCheckpointMark();
+    List<String> stoppingWithShards = checkpointToShardsIds(ch);
+    LOG.info(
+        "Stopping pool {} {} {}. Shards = {}",
+        poolId,
+        config.getStreamName(),
+        config.getConsumerArn(),
+        stoppingWithShards);
+
     shardsStates.values().forEach(ShardSubscriberState::cancel);
     subscriptionFutures.values().forEach(f -> f.cancel(false));
+
+    // TODO: added due to Direct runner re-creating readers all the time.
+    long actualCoolDownDelayMs =
+        (coolDownDelayMs > 0) ? coolDownDelayMs : RECONNECT_AFTER_SUCCESS_DELAY_MS;
+    try {
+      Thread.sleep(actualCoolDownDelayMs);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
     return true;
   }
 
@@ -288,5 +330,11 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
             .collect(Collectors.toList());
 
     return new KinesisReaderCheckpoint(checkpoints);
+  }
+
+  private List<String> checkpointToShardsIds(KinesisReaderCheckpoint checkpoint) {
+    List<String> result = new ArrayList<>();
+    checkpoint.forEach(chk -> result.add(chk.getShardId()));
+    return Collections.unmodifiableList(result);
   }
 }

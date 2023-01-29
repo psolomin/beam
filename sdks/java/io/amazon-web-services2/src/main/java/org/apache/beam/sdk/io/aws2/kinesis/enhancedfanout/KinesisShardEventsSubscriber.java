@@ -29,7 +29,6 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHan
 
 class KinesisShardEventsSubscriber implements Subscriber<SubscribeToShardEventStream> {
   private static final Logger LOG = LoggerFactory.getLogger(KinesisShardEventsSubscriber.class);
-  private static final String LOG_MSG_TEMPLATE = "Stream = {} consumer = {} shard = {}";
 
   private final ShardSubscribersPoolImpl pool;
   private final CountDownLatch isRunningLatch;
@@ -78,6 +77,7 @@ class KinesisShardEventsSubscriber implements Subscriber<SubscribeToShardEventSt
 
   @Override
   public void onError(Throwable throwable) {
+    LOG.warn("Pool id = {} shard id = {} got error", pool.getPoolId(), shardId, throwable);
     pushEvent(ErrorShardEvent.fromErr(shardId, throwable));
     cancel();
   }
@@ -91,7 +91,12 @@ class KinesisShardEventsSubscriber implements Subscriber<SubscribeToShardEventSt
    */
   @Override
   public void onComplete() {
-    LOG.info(LOG_MSG_TEMPLATE + " Complete", streamName, shardId, consumerArn);
+    LOG.info(
+        "Pool id = {} stream = {} consumer = {} shard = {}. Subscription complete",
+        pool.getPoolId(),
+        streamName,
+        shardId,
+        consumerArn);
     pushEvent(SubscriptionCompleteShardEvent.create(shardId));
   }
 
@@ -102,6 +107,13 @@ class KinesisShardEventsSubscriber implements Subscriber<SubscribeToShardEventSt
   }
 
   void cancel() {
+    LOG.warn(
+        "Pool id = {} stream = {} consumer = {} shard = {}. Subscription canceled",
+        pool.getPoolId(),
+        streamName,
+        shardId,
+        consumerArn);
+
     if (cancelled) {
       return;
     }
@@ -113,7 +125,6 @@ class KinesisShardEventsSubscriber implements Subscriber<SubscribeToShardEventSt
   }
 
   private void pushEvent(ShardEvent event) {
-    LOG.info("Got event {}", event);
     if (cancelled) {
       return;
     }
