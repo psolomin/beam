@@ -41,7 +41,11 @@ public class ShardSubscriberStateImpl implements ShardSubscriberState {
 
   @Override
   public void ackRecord(ExtendedKinesisRecord record) {
-    shardCheckpoint = shardCheckpoint.moveAfter(record.getContinuationSequenceNumber());
+    if (!shardCheckpoint.isClosed()) {
+      shardCheckpoint = shardCheckpoint.moveAfter(record.getContinuationSequenceNumber());
+    } else {
+      shardCheckpoint = shardCheckpoint.markOrphan();
+    }
     KinesisRecord kinesisRecord = record.getKinesisRecord();
     if (kinesisRecord != null) {
       latestRecordTimestampPolicy.update(kinesisRecord);
@@ -56,6 +60,11 @@ public class ShardSubscriberStateImpl implements ShardSubscriberState {
   @Override
   public void cancel() {
     subscriber.cancel();
+  }
+
+  @Override
+  public void markClosed() {
+    shardCheckpoint = shardCheckpoint.markClosed();
   }
 
   @Override

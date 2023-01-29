@@ -17,6 +17,7 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
+import java.io.IOException;
 import java.util.UUID;
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
@@ -31,7 +32,7 @@ public interface ShardSubscribersPool {
 
   boolean stop();
 
-  CustomOptional<KinesisRecord> nextRecord();
+  CustomOptional<KinesisRecord> nextRecord() throws IOException;
 
   Instant getWatermark();
 
