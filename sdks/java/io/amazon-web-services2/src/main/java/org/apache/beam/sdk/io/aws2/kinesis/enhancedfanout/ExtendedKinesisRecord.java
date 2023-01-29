@@ -53,6 +53,10 @@ public class ExtendedKinesisRecord {
     return new ExtendedKinesisRecord(shardId, continuationSequenceNumber, 0L, null);
   }
 
+  public static ExtendedKinesisRecord fromReShard(String shardId) {
+    return new ExtendedKinesisRecord(shardId, "0", 0L, null);
+  }
+
   public String getShardId() {
     return shardId;
   }

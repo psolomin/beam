@@ -17,6 +17,10 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
+import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.ShardSubscribersPoolStatus.errStatus;
+import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.ShardSubscribersPoolStatus.okStatus;
+
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -29,6 +33,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
@@ -48,11 +53,13 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
   private static final int TARGET_MIN_REMAINING_CAPACITY = BUFFER_SIZE / 5;
   private static final long INITIAL_DEMAND_PER_SHARD = 2L;
   private static final long BUFFER_POLL_WAIT_MS = 1_000L;
-  private static final long ENQUEUE_TIMEOUT_MS = 3_000;
+  private static final long ENQUEUE_TIMEOUT_MS = 3_000L;
 
   // If you call SubscribeToShard again with the same ConsumerARN and ShardId
   // within 5 seconds of a successful call, you'll get a ResourceInUseException.
-  private static final long RECONNECT_AFTER_SUCCESS_DELAY_MS = 6_000;
+  private static final long RECONNECT_AFTER_SUCCESS_DELAY_MS = 6_000L;
+  private static final long RECONNECT_AFTER_FAILURE_DELAY_MS = 1_000L;
+  // TODO: add max re-connect attempts per shard
 
   private final UUID poolId;
   private final Config config;
@@ -61,6 +68,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
   private final ConcurrentMap<String, ShardSubscriberState> shardsStates;
   private final ConcurrentMap<String, CompletableFuture<Void>> subscriptionFutures;
   private final BlockingQueue<ExtendedKinesisRecord> eventsBuffer;
+  private final AtomicReference<ShardSubscribersPoolStatus> poolStatus;
 
   public ShardSubscribersPoolImpl(
       Config config, AsyncClientProxy kinesis, KinesisReaderCheckpoint initialCheckpoint) {
@@ -71,6 +79,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
     this.shardsStates = new ConcurrentHashMap<>();
     this.subscriptionFutures = new ConcurrentHashMap<>();
     this.eventsBuffer = new LinkedBlockingQueue<>(BUFFER_SIZE);
+    this.poolStatus = new AtomicReference<>(okStatus());
   }
 
   @Override
@@ -108,6 +117,22 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
   @Override
   public boolean stop() {
     return stop(0L);
+  }
+
+  private void decommissionShardSubscription(String shardId) {
+    shardsStates.computeIfPresent(
+        shardId,
+        (s, st) -> {
+          st.cancel();
+          st.markClosed();
+          return st;
+        });
+    subscriptionFutures.computeIfPresent(
+        shardId,
+        (s, f) -> {
+          f.cancel(false);
+          return f;
+        });
   }
 
   @Override
@@ -171,6 +196,19 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
                         successorShardId,
                         shardId -> createSubscription(shardId, newCheckpoint, false));
                   });
+
+              decommissionShardSubscription(event.getShardId());
+              try {
+                if (!eventsBuffer.offer(
+                    ExtendedKinesisRecord.fromReShard(event.getShardId()),
+                    ENQUEUE_TIMEOUT_MS,
+                    TimeUnit.MILLISECONDS)) {
+                  // We should never demand more than we consume.
+                  throw new RuntimeException("This should never happen");
+                }
+              } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+              }
             });
         break;
       case RECORDS:
@@ -183,6 +221,43 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
         }
         break;
       case ERROR:
+        ErrorShardEvent errorShardEvent = (ErrorShardEvent) event;
+        ConsumerError error = ConsumerError.toConsumerError(errorShardEvent.getErr());
+
+        if (error instanceof RecoverableConsumerError) {
+          LOG.warn(
+              "Pool id = {} shard id = {} got recoverable error",
+              poolId,
+              event.getShardId(),
+              errorShardEvent.getErr());
+          CompletableFuture.runAsync(
+              () -> {
+                try {
+                  Thread.sleep(RECONNECT_AFTER_FAILURE_DELAY_MS);
+                } catch (InterruptedException e) {
+                  Thread.currentThread().interrupt();
+                }
+                ShardSubscriberState state = shardsStates.get(event.getShardId());
+                if (state != null) {
+                  subscriptionFutures.computeIfPresent(
+                      event.getShardId(),
+                      (k, v) -> createSubscription(k, state.getCheckpoint(), false));
+                }
+              });
+        } else {
+          LOG.error(
+              "Pool id = {} shard id = {} got critical error",
+              poolId,
+              event.getShardId(),
+              errorShardEvent.getErr());
+          CompletableFuture.runAsync(
+              () -> {
+                poolStatus.compareAndSet(
+                    okStatus(), errStatus(errorShardEvent.getShardId(), errorShardEvent.getErr()));
+                stop();
+              });
+        }
+        break;
 
       default:
         LOG.warn("Unknown event type {}", event.getType());
@@ -293,7 +368,13 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
   }
 
   @Override
-  public CustomOptional<KinesisRecord> nextRecord() {
+  public CustomOptional<KinesisRecord> nextRecord() throws IOException {
+    ShardSubscribersPoolStatus status = poolStatus.get();
+    if (!status.isOk()) {
+      LOG.error("Pool id = {} shard id = {} failed", poolId, status.getShardId(), status.getErr());
+      throw new IOException(status.getErr());
+    }
+
     try {
       ExtendedKinesisRecord maybeRecord =
           eventsBuffer.poll(BUFFER_POLL_WAIT_MS, TimeUnit.MILLISECONDS);
@@ -332,6 +413,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
     List<ShardCheckpoint> checkpoints =
         shardsStates.values().stream()
             .map(ShardSubscriberState::getCheckpoint)
+            .filter(ck -> !ck.isOrphan())
             .collect(Collectors.toList());
 
     return new KinesisReaderCheckpoint(checkpoints);

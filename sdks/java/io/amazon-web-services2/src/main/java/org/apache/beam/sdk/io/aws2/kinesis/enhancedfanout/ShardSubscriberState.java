@@ -28,5 +28,7 @@ public interface ShardSubscriberState {
 
   void cancel();
 
+  void markClosed();
+
   Instant getShardWatermark();
 }

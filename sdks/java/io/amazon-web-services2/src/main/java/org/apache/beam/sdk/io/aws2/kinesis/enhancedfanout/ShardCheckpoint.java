@@ -58,6 +58,7 @@ public class ShardCheckpoint implements Serializable {
   private final long subSequenceNumber;
   private final @Nullable Instant timestamp;
   private final boolean shardIsClosed;
+  private final boolean shardIsOrphan;
 
   public ShardCheckpoint(
       String streamName, String consumerArn, String shardId, StartingPoint startingPoint) {
@@ -69,6 +70,7 @@ public class ShardCheckpoint implements Serializable {
         null,
         0L,
         startingPoint.getTimestamp(),
+        false,
         false);
   }
 
@@ -80,7 +82,8 @@ public class ShardCheckpoint implements Serializable {
       @Nullable String continuationSequenceNumber,
       long subSequenceNumber,
       @Nullable Instant timestamp,
-      boolean shardIsClosed) {
+      boolean shardIsClosed,
+      boolean shardIsOrphan) {
     this.shardIteratorType = checkNotNull(shardIteratorType, "shardIteratorType");
     this.streamName = checkNotNull(streamName, "streamName");
     this.consumerArn = checkNotNull(consumerArn, "consumerArn");
@@ -107,6 +110,7 @@ public class ShardCheckpoint implements Serializable {
     this.continuationSequenceNumber = continuationSequenceNumber;
     this.timestamp = timestamp;
     this.shardIsClosed = shardIsClosed;
+    this.shardIsOrphan = shardIsOrphan;
   }
 
   /**
@@ -169,7 +173,8 @@ public class ShardCheckpoint implements Serializable {
         continuationSequenceNumber,
         record.getSubSequenceNumber(),
         timestamp,
-        shardIsClosed);
+        shardIsClosed,
+        shardIsOrphan);
   }
 
   public ShardCheckpoint moveAfter(String continuationSequenceNumber) {
@@ -181,7 +186,8 @@ public class ShardCheckpoint implements Serializable {
         continuationSequenceNumber,
         0L,
         timestamp,
-        shardIsClosed);
+        shardIsClosed,
+        shardIsOrphan);
   }
 
   public ShardCheckpoint markClosed() {
@@ -193,6 +199,20 @@ public class ShardCheckpoint implements Serializable {
         continuationSequenceNumber,
         subSequenceNumber,
         timestamp,
+        true,
+        shardIsOrphan);
+  }
+
+  public ShardCheckpoint markOrphan() {
+    return new ShardCheckpoint(
+        streamName,
+        consumerArn,
+        shardId,
+        shardIteratorType,
+        continuationSequenceNumber,
+        subSequenceNumber,
+        timestamp,
+        shardIsClosed,
         true);
   }
 
@@ -208,7 +228,11 @@ public class ShardCheckpoint implements Serializable {
     return shardId;
   }
 
-  public boolean shardIsClosed() {
+  public boolean isClosed() {
     return shardIsClosed;
+  }
+
+  public boolean isOrphan() {
+    return shardIsOrphan;
   }
 }

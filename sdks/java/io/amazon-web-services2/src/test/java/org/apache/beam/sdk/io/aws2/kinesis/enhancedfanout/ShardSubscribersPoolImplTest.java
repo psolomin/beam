@@ -21,6 +21,7 @@ import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.Helpers
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
@@ -36,7 +37,7 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 
 public class ShardSubscribersPoolImplTest {
   @Test
-  public void poolReSubscribesAndReadsRecords() throws TransientKinesisException {
+  public void poolReSubscribesAndReadsRecords() throws TransientKinesisException, IOException {
     Config config = createConfig();
     KinesisClientProxyStub kinesis = KinesisStubBehaviours.twoShardsWithRecords();
     KinesisReaderCheckpoint initialCheckpoint =
@@ -59,7 +60,7 @@ public class ShardSubscribersPoolImplTest {
   }
 
   @Test
-  public void poolHandlesShardUp() throws TransientKinesisException {
+  public void poolHandlesShardUp() throws TransientKinesisException, IOException {
     Config config = createConfig();
     KinesisClientProxyStub kinesis = KinesisStubBehaviours.twoShardsWithRecordsAndShardUp();
     KinesisReaderCheckpoint initialCheckpoint =
@@ -82,7 +83,7 @@ public class ShardSubscribersPoolImplTest {
   }
 
   @Test
-  public void poolHandlesShardDown() throws TransientKinesisException {
+  public void poolHandlesShardDown() throws TransientKinesisException, IOException {
     Config config = createConfig();
     KinesisClientProxyStub kinesis = KinesisStubBehaviours.fourShardsWithRecordsAndShardDown();
     KinesisReaderCheckpoint initialCheckpoint =
@@ -106,7 +107,8 @@ public class ShardSubscribersPoolImplTest {
     assertTrue(pool.stop(1L));
   }
 
-  public static List<KinesisRecord> waitForRecords(ShardSubscribersPoolImpl pool, int expectedCnt) {
+  public static List<KinesisRecord> waitForRecords(ShardSubscribersPoolImpl pool, int expectedCnt)
+      throws IOException {
     List<KinesisRecord> records = new ArrayList<>();
     int maxAttempts = expectedCnt * 4;
     int i = 0;
