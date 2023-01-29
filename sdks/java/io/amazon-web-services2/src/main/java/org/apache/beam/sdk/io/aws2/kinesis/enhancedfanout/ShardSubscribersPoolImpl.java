@@ -231,7 +231,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
             .startingPosition(checkpoint.toStartingPosition())
             .build();
 
-    LOG.info("Starting subscribe request {} - {}", subscribeRequestId, request);
+    LOG.info("Pool id {} starting subscribe request {} - {}", poolId, subscribeRequestId, request);
 
     CountDownLatch eventsHandlerReadyLatch = new CountDownLatch(1);
 
@@ -251,7 +251,8 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
             .onError(
                 e ->
                     LOG.error(
-                        "Failed to execute subscribe request {} - {}",
+                        "Pool id = {} failed to execute subscribe request {} - {}",
+                        poolId,
                         subscribeRequestId,
                         request,
                         e))
@@ -283,7 +284,11 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
       shardState.requestRecords(1L);
     }
     shardsStates.put(shardId, shardState);
-    LOG.info("Subscription for shard {} established", shardId);
+    LOG.info(
+        "Pool id = {} request = {} subscription for shard {} established",
+        poolId,
+        subscribeRequestId,
+        shardId);
     return f;
   }
 

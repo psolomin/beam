@@ -111,8 +111,8 @@ class KinesisShardEventsSubscriber implements Subscriber<SubscribeToShardEventSt
         "Pool id = {} stream = {} consumer = {} shard = {}. Subscription canceled",
         pool.getPoolId(),
         streamName,
-        shardId,
-        consumerArn);
+        consumerArn,
+        shardId);
 
     if (cancelled) {
       return;
