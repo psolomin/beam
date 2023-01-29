@@ -17,12 +17,17 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
+import java.util.UUID;
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.joda.time.Instant;
 
 public interface ShardSubscribersPool {
+  UUID getPoolId();
+
   boolean start();
+
+  boolean stop(long coolDownDelayMs);
 
   boolean stop();
 
