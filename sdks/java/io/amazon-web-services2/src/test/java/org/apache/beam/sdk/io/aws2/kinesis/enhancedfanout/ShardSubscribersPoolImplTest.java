@@ -107,6 +107,30 @@ public class ShardSubscribersPoolImplTest {
     assertTrue(pool.stop(1L));
   }
 
+  @Test
+  public void poolReSubscribesUponRecoverableError() throws TransientKinesisException, IOException {
+    Config config = createConfig();
+    KinesisClientProxyStub kinesis = KinesisStubBehaviours
+            .twoShardsWithRecordsOneShardRecoverableError();
+    KinesisReaderCheckpoint initialCheckpoint =
+            new FromScratchCheckpointGenerator(config).generate(kinesis);
+    ShardSubscribersPoolImpl pool =
+            new ShardSubscribersPoolImpl(config, kinesis, initialCheckpoint);
+    assertTrue(pool.start());
+    List<KinesisRecord> actualRecords = waitForRecords(pool, 20);
+    assertEquals(20, actualRecords.size());
+    List<SubscribeToShardRequest> expectedSubscribeRequests =
+            ImmutableList.of(
+                    subscribeLatest("shard-000"),
+                    subscribeLatest("shard-001"),
+                    subscribeSeqNumber("shard-000", "10"),
+                    subscribeSeqNumber("shard-001", "20"),
+                    subscribeSeqNumber("shard-000", "30"),
+                    subscribeSeqNumber("shard-001", "40"));
+    assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
+    assertTrue(pool.stop(1L));
+  }
+
   public static List<KinesisRecord> waitForRecords(ShardSubscribersPoolImpl pool, int expectedCnt)
       throws IOException {
     List<KinesisRecord> records = new ArrayList<>();
