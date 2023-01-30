@@ -17,7 +17,6 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.WatermarkPolicy;
@@ -48,9 +47,9 @@ public class ShardSubscriberStateImpl implements ShardSubscriberState {
   }
 
   @Override
-  public void ackRecord(ExtendedKinesisRecord record) throws IOException {
+  public void ackRecord(ExtendedKinesisRecord record) throws IllegalStateException {
     if (err != null) {
-      throw new IOException(err);
+      throw new IllegalStateException(err);
     }
     if (!shardCheckpoint.isClosed()) {
       shardCheckpoint = shardCheckpoint.moveAfter(record.getContinuationSequenceNumber());
