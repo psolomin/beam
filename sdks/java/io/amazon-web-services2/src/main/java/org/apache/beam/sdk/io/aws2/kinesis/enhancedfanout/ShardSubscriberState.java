@@ -17,12 +17,13 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
+import java.io.IOException;
 import org.joda.time.Instant;
 
 public interface ShardSubscriberState {
   void requestRecords(long n);
 
-  void ackRecord(ExtendedKinesisRecord record);
+  void ackRecord(ExtendedKinesisRecord record) throws IOException;
 
   ShardCheckpoint getCheckpoint();
 
@@ -31,4 +32,6 @@ public interface ShardSubscriberState {
   void markClosed();
 
   Instant getShardWatermark();
+
+  void setErr(Throwable e);
 }

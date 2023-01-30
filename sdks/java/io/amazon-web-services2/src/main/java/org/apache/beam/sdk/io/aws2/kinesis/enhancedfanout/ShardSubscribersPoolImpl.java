@@ -17,9 +17,6 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.ShardSubscribersPoolStatus.errStatus;
-import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.ShardSubscribersPoolStatus.okStatus;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -33,7 +30,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
@@ -66,9 +62,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
   private final AsyncClientProxy kinesis;
   private final KinesisReaderCheckpoint initialCheckpoint;
   private final ConcurrentMap<String, ShardSubscriberState> shardsStates;
-  private final ConcurrentMap<String, CompletableFuture<Void>> subscriptionFutures;
   private final BlockingQueue<ExtendedKinesisRecord> eventsBuffer;
-  private final AtomicReference<ShardSubscribersPoolStatus> poolStatus;
 
   public ShardSubscribersPoolImpl(
       Config config, AsyncClientProxy kinesis, KinesisReaderCheckpoint initialCheckpoint) {
@@ -77,9 +71,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
     this.kinesis = kinesis;
     this.initialCheckpoint = initialCheckpoint;
     this.shardsStates = new ConcurrentHashMap<>();
-    this.subscriptionFutures = new ConcurrentHashMap<>();
     this.eventsBuffer = new LinkedBlockingQueue<>(BUFFER_SIZE);
-    this.poolStatus = new AtomicReference<>(okStatus());
   }
 
   @Override
@@ -88,6 +80,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
   }
 
   @Override
+  @SuppressWarnings("FutureReturnValueIgnored")
   public boolean start() {
     // TODO: handle different types of start:
     // ShardIteratorType.LATEST
@@ -107,10 +100,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
         startingWithShards);
 
     initialCheckpoint.forEach(
-        shardCheckpoint ->
-            subscriptionFutures.put(
-                shardCheckpoint.getShardId(),
-                createSubscription(shardCheckpoint.getShardId(), shardCheckpoint, true)));
+        shardCheckpoint -> createSubscription(shardCheckpoint.getShardId(), shardCheckpoint, true));
     return true;
   }
 
@@ -127,12 +117,6 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
           st.markClosed();
           return st;
         });
-    subscriptionFutures.computeIfPresent(
-        shardId,
-        (s, f) -> {
-          f.cancel(false);
-          return f;
-        });
   }
 
   @Override
@@ -147,8 +131,6 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
         stoppingWithShards);
 
     shardsStates.values().forEach(ShardSubscriberState::cancel);
-    subscriptionFutures.values().forEach(f -> f.cancel(false));
-
     // TODO: added due to Direct runner re-creating readers all the time.
     long actualCoolDownDelayMs =
         (coolDownDelayMs > 0) ? coolDownDelayMs : RECONNECT_AFTER_SUCCESS_DELAY_MS;
@@ -174,9 +156,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
             () -> {
               ShardSubscriberState state = shardsStates.get(event.getShardId());
               if (state != null) {
-                subscriptionFutures.computeIfPresent(
-                    event.getShardId(),
-                    (k, v) -> createSubscription(k, state.getCheckpoint(), false));
+                createSubscription(event.getShardId(), state.getCheckpoint(), false);
               }
             });
         break;
@@ -192,9 +172,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
                             config.getConsumerArn(),
                             successorShardId,
                             new StartingPoint(InitialPositionInStream.TRIM_HORIZON));
-                    subscriptionFutures.computeIfAbsent(
-                        successorShardId,
-                        shardId -> createSubscription(shardId, newCheckpoint, false));
+                    createSubscription(successorShardId, newCheckpoint, false);
                   });
 
               decommissionShardSubscription(event.getShardId());
@@ -239,9 +217,8 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
                 }
                 ShardSubscriberState state = shardsStates.get(event.getShardId());
                 if (state != null) {
-                  subscriptionFutures.computeIfPresent(
-                      event.getShardId(),
-                      (k, v) -> createSubscription(k, state.getCheckpoint(), false));
+                  state.cancel();
+                  createSubscription(event.getShardId(), state.getCheckpoint(), false);
                 }
               });
         } else {
@@ -252,8 +229,12 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
               errorShardEvent.getErr());
           CompletableFuture.runAsync(
               () -> {
-                poolStatus.compareAndSet(
-                    okStatus(), errStatus(errorShardEvent.getShardId(), errorShardEvent.getErr()));
+                shardsStates.computeIfPresent(
+                    event.getShardId(),
+                    (k, v) -> {
+                      v.setErr(errorShardEvent.getErr());
+                      return v;
+                    });
                 stop();
               });
         }
@@ -318,9 +299,6 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
             config.getConsumerArn(),
             shardId);
 
-    ShardSubscriberState shardState =
-        new ShardSubscriberStateImpl(shardEventsSubscriber, checkpoint);
-
     SubscribeToShardResponseHandler responseHandler =
         SubscribeToShardResponseHandler.builder()
             .onError(
@@ -335,6 +313,8 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
             .build();
 
     CompletableFuture<Void> f = kinesis.subscribeToShard(request, responseHandler);
+    ShardSubscriberState shardState =
+        new ShardSubscriberStateImpl(f, shardEventsSubscriber, checkpoint);
     boolean subscriptionWasEstablished = false;
     try {
       subscriptionWasEstablished =
@@ -369,12 +349,6 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
 
   @Override
   public CustomOptional<KinesisRecord> nextRecord() throws IOException {
-    ShardSubscribersPoolStatus status = poolStatus.get();
-    if (!status.isOk()) {
-      LOG.error("Pool id = {} shard id = {} failed", poolId, status.getShardId(), status.getErr());
-      throw new IOException(status.getErr());
-    }
-
     try {
       ExtendedKinesisRecord maybeRecord =
           eventsBuffer.poll(BUFFER_POLL_WAIT_MS, TimeUnit.MILLISECONDS);
