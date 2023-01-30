@@ -38,6 +38,11 @@ public class Config implements Serializable {
   private static final long RECONNECT_AFTER_FAILURE_DELAY_MS_DEFAULT = 1_000L;
   private final long reconnectAfterFailureDelayMs;
 
+  // If you call SubscribeToShard again with the same ConsumerARN and ShardId
+  // within 5 seconds of a successful call, you'll get a ResourceInUseException.
+  private static final long STOP_COOL_DOWN_DELAY_MS_DEFAULT = 6_000L;
+  private final long stopCoolDownDelayMs;
+
   public Config(
       String streamName,
       String consumerArn,
@@ -54,24 +59,28 @@ public class Config implements Serializable {
     this.startTimestamp = startTimestamp;
     this.poolStartTimeoutMs = POOL_START_TIMEOUT_MS_DEFAULT;
     this.reconnectAfterFailureDelayMs = RECONNECT_AFTER_FAILURE_DELAY_MS_DEFAULT;
+    this.stopCoolDownDelayMs = STOP_COOL_DOWN_DELAY_MS_DEFAULT;
   }
 
   public Config(String streamName, String consumerArn, StartingPoint startingPoint) {
-    this(
-        streamName,
-        consumerArn,
-        startingPoint,
-        Optional.absent()
-    );
+    this(streamName, consumerArn, startingPoint, Optional.absent());
   }
 
-  public Config(String streamName, String consumerArn, StartingPoint startingPoint, Optional<Instant> startTimestamp, long poolStartTimeoutMs, long reconnectAfterFailureDelayMs) {
+  public Config(
+      String streamName,
+      String consumerArn,
+      StartingPoint startingPoint,
+      Optional<Instant> startTimestamp,
+      long poolStartTimeoutMs,
+      long reconnectAfterFailureDelayMs,
+      long stopCoolDownDelayMs) {
     this.streamName = streamName;
     this.consumerArn = consumerArn;
     this.startingPoint = startingPoint;
     this.startTimestamp = startTimestamp;
     this.poolStartTimeoutMs = poolStartTimeoutMs;
     this.reconnectAfterFailureDelayMs = reconnectAfterFailureDelayMs;
+    this.stopCoolDownDelayMs = stopCoolDownDelayMs;
   }
 
   public static Config fromIOSpec(KinesisIO.Read spec) {
@@ -103,5 +112,9 @@ public class Config implements Serializable {
 
   public long getReconnectAfterFailureDelayMs() {
     return reconnectAfterFailureDelayMs;
+  }
+
+  public long getStopCoolDownDelayMs() {
+    return stopCoolDownDelayMs;
   }
 }

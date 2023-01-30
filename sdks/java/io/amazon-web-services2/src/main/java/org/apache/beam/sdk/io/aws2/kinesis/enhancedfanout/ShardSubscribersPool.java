@@ -28,8 +28,6 @@ public interface ShardSubscribersPool {
 
   boolean start();
 
-  boolean stop(long coolDownDelayMs);
-
   boolean stop();
 
   CustomOptional<KinesisRecord> nextRecord() throws IOException;
