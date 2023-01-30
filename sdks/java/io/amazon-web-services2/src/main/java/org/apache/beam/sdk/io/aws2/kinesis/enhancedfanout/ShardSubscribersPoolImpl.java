@@ -54,7 +54,6 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
   // If you call SubscribeToShard again with the same ConsumerARN and ShardId
   // within 5 seconds of a successful call, you'll get a ResourceInUseException.
   private static final long RECONNECT_AFTER_SUCCESS_DELAY_MS = 6_000L;
-  private static final long RECONNECT_AFTER_FAILURE_DELAY_MS = 1_000L;
   // TODO: add max re-connect attempts per shard
 
   private final UUID poolId;
@@ -211,7 +210,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
           CompletableFuture.runAsync(
               () -> {
                 try {
-                  Thread.sleep(RECONNECT_AFTER_FAILURE_DELAY_MS);
+                  Thread.sleep(config.getReconnectAfterFailureDelayMs());
                 } catch (InterruptedException e) {
                   Thread.currentThread().interrupt();
                 }

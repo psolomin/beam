@@ -37,10 +37,8 @@ public class Helpers {
         "consumer-01",
         new StartingPoint(InitialPositionInStream.LATEST),
         Optional.absent(),
-        500L,
-        50L,
-        100,
-        5_000L,
-        50L);
+        1_000L,
+            0L
+    );
   }
 }
