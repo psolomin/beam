@@ -353,12 +353,18 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
       ExtendedKinesisRecord maybeRecord =
           eventsBuffer.poll(BUFFER_POLL_WAIT_MS, TimeUnit.MILLISECONDS);
       if (maybeRecord != null) {
-        ShardSubscriberState shardState = shardsStates.get(maybeRecord.getShardId());
-        if (shardState != null) {
-          shardState.ackRecord(maybeRecord);
-          if (eventsBuffer.remainingCapacity() > TARGET_MIN_REMAINING_CAPACITY) {
-            shardState.requestRecords(1L);
-          }
+        try {
+          shardsStates.computeIfPresent(
+              maybeRecord.getShardId(),
+              (k, v) -> {
+                v.ackRecord(maybeRecord);
+                if (eventsBuffer.remainingCapacity() > TARGET_MIN_REMAINING_CAPACITY) {
+                  v.requestRecords(1L);
+                }
+                return v;
+              });
+        } catch (IllegalStateException e) {
+          throw new IOException(e.getCause());
         }
         KinesisRecord record = maybeRecord.getKinesisRecord();
         if (record != null) {
