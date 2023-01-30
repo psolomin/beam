@@ -79,7 +79,6 @@ class KinesisShardEventsSubscriber implements Subscriber<SubscribeToShardEventSt
   public void onError(Throwable throwable) {
     LOG.warn("Pool id = {} shard id = {} got error", pool.getPoolId(), shardId, throwable);
     pushEvent(ErrorShardEvent.fromErr(shardId, throwable));
-    cancel();
   }
 
   /**

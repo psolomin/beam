@@ -17,19 +17,27 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
+import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.WatermarkPolicy;
 import org.apache.beam.sdk.io.aws2.kinesis.WatermarkPolicyFactory;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joda.time.Instant;
 
 public class ShardSubscriberStateImpl implements ShardSubscriberState {
   private final KinesisShardEventsSubscriber subscriber;
+  private final CompletableFuture<Void> subscriptionFuture;
   private ShardCheckpoint shardCheckpoint;
   private final WatermarkPolicy latestRecordTimestampPolicy =
       WatermarkPolicyFactory.withArrivalTimePolicy().createWatermarkPolicy();
+  private @Nullable Throwable err = null;
 
   public ShardSubscriberStateImpl(
-      KinesisShardEventsSubscriber subscriber, ShardCheckpoint initialCheckpoint) {
+      CompletableFuture<Void> subscriptionFuture,
+      KinesisShardEventsSubscriber subscriber,
+      ShardCheckpoint initialCheckpoint) {
+    this.subscriptionFuture = subscriptionFuture;
     this.subscriber = subscriber;
     this.shardCheckpoint = initialCheckpoint;
   }
@@ -40,7 +48,10 @@ public class ShardSubscriberStateImpl implements ShardSubscriberState {
   }
 
   @Override
-  public void ackRecord(ExtendedKinesisRecord record) {
+  public void ackRecord(ExtendedKinesisRecord record) throws IOException {
+    if (err != null) {
+      throw new IOException(err);
+    }
     if (!shardCheckpoint.isClosed()) {
       shardCheckpoint = shardCheckpoint.moveAfter(record.getContinuationSequenceNumber());
     } else {
@@ -60,6 +71,7 @@ public class ShardSubscriberStateImpl implements ShardSubscriberState {
   @Override
   public void cancel() {
     subscriber.cancel();
+    subscriptionFuture.cancel(false);
   }
 
   @Override
@@ -70,5 +82,12 @@ public class ShardSubscriberStateImpl implements ShardSubscriberState {
   @Override
   public Instant getShardWatermark() {
     return latestRecordTimestampPolicy.getWatermark();
+  }
+
+  @Override
+  public void setErr(Throwable e) {
+    if (err == null) {
+      err = Checkers.checkNotNull(e, "err");
+    }
   }
 }
