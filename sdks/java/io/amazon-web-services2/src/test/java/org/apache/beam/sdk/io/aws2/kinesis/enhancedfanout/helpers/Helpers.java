@@ -38,7 +38,7 @@ public class Helpers {
         new StartingPoint(InitialPositionInStream.LATEST),
         Optional.absent(),
         1_000L,
-            0L
-    );
+        0L,
+        0L);
   }
 }

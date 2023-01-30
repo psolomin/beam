@@ -19,6 +19,7 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.Helpers.createConfig;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -56,7 +57,7 @@ public class ShardSubscribersPoolImplTest {
             subscribeSeqNumber("shard-000", "18"),
             subscribeSeqNumber("shard-001", "24"));
     assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
-    assertTrue(pool.stop(1L));
+    assertTrue(pool.stop());
   }
 
   @Test
@@ -79,7 +80,7 @@ public class ShardSubscribersPoolImplTest {
             subscribeTrimHorizon("shard-004"),
             subscribeTrimHorizon("shard-005"));
     assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
-    assertTrue(pool.stop(1L));
+    assertTrue(pool.stop());
   }
 
   @Test
@@ -104,31 +105,58 @@ public class ShardSubscribersPoolImplTest {
             subscribeTrimHorizon("shard-005"),
             subscribeTrimHorizon("shard-006"));
     assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
-    assertTrue(pool.stop(1L));
+    assertTrue(pool.stop());
   }
 
   @Test
   public void poolReSubscribesUponRecoverableError() throws TransientKinesisException, IOException {
     Config config = createConfig();
-    KinesisClientProxyStub kinesis = KinesisStubBehaviours
-            .twoShardsWithRecordsOneShardRecoverableError();
+    KinesisClientProxyStub kinesis =
+        KinesisStubBehaviours.twoShardsWithRecordsOneShardRecoverableError();
     KinesisReaderCheckpoint initialCheckpoint =
-            new FromScratchCheckpointGenerator(config).generate(kinesis);
+        new FromScratchCheckpointGenerator(config).generate(kinesis);
     ShardSubscribersPoolImpl pool =
-            new ShardSubscribersPoolImpl(config, kinesis, initialCheckpoint);
+        new ShardSubscribersPoolImpl(config, kinesis, initialCheckpoint);
     assertTrue(pool.start());
     List<KinesisRecord> actualRecords = waitForRecords(pool, 20);
     assertEquals(20, actualRecords.size());
     List<SubscribeToShardRequest> expectedSubscribeRequests =
-            ImmutableList.of(
-                    subscribeLatest("shard-000"),
-                    subscribeLatest("shard-001"),
-                    subscribeSeqNumber("shard-000", "10"),
-                    subscribeSeqNumber("shard-001", "20"),
-                    subscribeSeqNumber("shard-000", "30"),
-                    subscribeSeqNumber("shard-001", "40"));
+        ImmutableList.of(
+            subscribeLatest("shard-000"),
+            subscribeLatest("shard-001"),
+            subscribeSeqNumber("shard-000", "10"),
+            subscribeSeqNumber("shard-001", "20"),
+            subscribeSeqNumber("shard-000", "30"),
+            subscribeSeqNumber("shard-001", "40"));
     assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
-    assertTrue(pool.stop(1L));
+    assertTrue(pool.stop());
+  }
+
+  @Test
+  public void poolPropagatesCriticalError() throws TransientKinesisException {
+    Config config = createConfig();
+    KinesisClientProxyStub kinesis = KinesisStubBehaviours.twoShardsWithRecordsOneShardError();
+    KinesisReaderCheckpoint initialCheckpoint =
+        new FromScratchCheckpointGenerator(config).generate(kinesis);
+    ShardSubscribersPoolImpl pool =
+        new ShardSubscribersPoolImpl(config, kinesis, initialCheckpoint);
+    assertTrue(pool.start());
+    Exception e = assertThrows(IOException.class, () -> waitForRecords(pool, 20));
+    Throwable nestedError = e.getCause().getCause();
+    assertTrue(nestedError instanceof RuntimeException);
+    assertEquals("Oh..", nestedError.getMessage());
+    List<SubscribeToShardRequest> expectedSubscribeRequests =
+        ImmutableList.of(
+            subscribeLatest("shard-000"),
+            subscribeLatest("shard-001"),
+            subscribeSeqNumber("shard-000", "10"));
+    assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
+    // check that there's only one subscribe request for error-ed shard
+    long shard01Reconnects =
+        kinesis.subscribeRequestsSeen().stream()
+            .filter(r -> r.shardId().equals("shard-001"))
+            .count();
+    assertEquals(1L, shard01Reconnects);
   }
 
   public static List<KinesisRecord> waitForRecords(ShardSubscribersPoolImpl pool, int expectedCnt)

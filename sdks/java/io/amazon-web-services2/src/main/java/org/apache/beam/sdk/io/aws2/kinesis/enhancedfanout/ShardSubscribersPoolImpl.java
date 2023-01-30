@@ -51,11 +51,6 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
   private static final long BUFFER_POLL_WAIT_MS = 1_000L;
   private static final long ENQUEUE_TIMEOUT_MS = 3_000L;
 
-  // If you call SubscribeToShard again with the same ConsumerARN and ShardId
-  // within 5 seconds of a successful call, you'll get a ResourceInUseException.
-  private static final long RECONNECT_AFTER_SUCCESS_DELAY_MS = 6_000L;
-  // TODO: add max re-connect attempts per shard
-
   private final UUID poolId;
   private final Config config;
   private final AsyncClientProxy kinesis;
@@ -103,11 +98,6 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
     return true;
   }
 
-  @Override
-  public boolean stop() {
-    return stop(0L);
-  }
-
   private void decommissionShardSubscription(String shardId) {
     shardsStates.computeIfPresent(
         shardId,
@@ -119,7 +109,7 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
   }
 
   @Override
-  public boolean stop(long coolDownDelayMs) {
+  public boolean stop() {
     KinesisReaderCheckpoint ch = getCheckpointMark();
     List<String> stoppingWithShards = checkpointToShardsIds(ch);
     LOG.info(
@@ -130,11 +120,8 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
         stoppingWithShards);
 
     shardsStates.values().forEach(ShardSubscriberState::cancel);
-    // TODO: added due to Direct runner re-creating readers all the time.
-    long actualCoolDownDelayMs =
-        (coolDownDelayMs > 0) ? coolDownDelayMs : RECONNECT_AFTER_SUCCESS_DELAY_MS;
     try {
-      Thread.sleep(actualCoolDownDelayMs);
+      Thread.sleep(config.getStopCoolDownDelayMs());
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }
@@ -234,6 +221,17 @@ public class ShardSubscribersPoolImpl implements ShardSubscribersPool {
                       v.setErr(errorShardEvent.getErr());
                       return v;
                     });
+                try {
+                  if (!eventsBuffer.offer(
+                      ExtendedKinesisRecord.fromError(event.getShardId()),
+                      ENQUEUE_TIMEOUT_MS,
+                      TimeUnit.MILLISECONDS)) {
+                    // We should never demand more than we consume.
+                    throw new RuntimeException("This should never happen");
+                  }
+                } catch (InterruptedException e) {
+                  Thread.currentThread().interrupt();
+                }
                 stop();
               });
         }

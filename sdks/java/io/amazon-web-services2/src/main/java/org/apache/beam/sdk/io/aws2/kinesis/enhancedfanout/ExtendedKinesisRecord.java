@@ -57,6 +57,10 @@ public class ExtendedKinesisRecord {
     return new ExtendedKinesisRecord(shardId, "0", 0L, null);
   }
 
+  public static ExtendedKinesisRecord fromError(String shardId) {
+    return new ExtendedKinesisRecord(shardId, "-1", 0L, null);
+  }
+
   public String getShardId() {
     return shardId;
   }
