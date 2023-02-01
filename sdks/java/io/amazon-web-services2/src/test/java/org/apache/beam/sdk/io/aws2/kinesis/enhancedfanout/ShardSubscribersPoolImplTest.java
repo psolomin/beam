@@ -23,17 +23,14 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
-import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
+import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.Helpers;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.KinesisClientProxyStub;
 import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.KinesisStubBehaviours;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 import org.junit.Test;
-import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
-import software.amazon.awssdk.services.kinesis.model.StartingPosition;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 
 public class ShardSubscribersPoolImplTest {
@@ -46,16 +43,16 @@ public class ShardSubscribersPoolImplTest {
     ShardSubscribersPoolImpl pool =
         new ShardSubscribersPoolImpl(config, kinesis, initialCheckpoint);
     assertTrue(pool.start());
-    List<KinesisRecord> actualRecords = waitForRecords(pool, 12);
+    List<KinesisRecord> actualRecords = Helpers.waitForRecords(pool, 12);
     assertEquals(12, actualRecords.size());
     List<SubscribeToShardRequest> expectedSubscribeRequests =
         ImmutableList.of(
-            subscribeLatest("shard-000"),
-            subscribeLatest("shard-001"),
-            subscribeSeqNumber("shard-000", "6"),
-            subscribeSeqNumber("shard-001", "12"),
-            subscribeSeqNumber("shard-000", "18"),
-            subscribeSeqNumber("shard-001", "24"));
+            Helpers.subscribeLatest("shard-000"),
+            Helpers.subscribeLatest("shard-001"),
+            Helpers.subscribeSeqNumber("shard-000", "6"),
+            Helpers.subscribeSeqNumber("shard-001", "12"),
+            Helpers.subscribeSeqNumber("shard-000", "18"),
+            Helpers.subscribeSeqNumber("shard-001", "24"));
     assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
     assertTrue(pool.stop());
   }
@@ -69,16 +66,16 @@ public class ShardSubscribersPoolImplTest {
     ShardSubscribersPoolImpl pool =
         new ShardSubscribersPoolImpl(config, kinesis, initialCheckpoint);
     assertTrue(pool.start());
-    List<KinesisRecord> actualRecords = waitForRecords(pool, 70);
+    List<KinesisRecord> actualRecords = Helpers.waitForRecords(pool, 70);
     assertEquals(70, actualRecords.size());
     List<SubscribeToShardRequest> expectedSubscribeRequests =
         ImmutableList.of(
-            subscribeLatest("shard-000"),
-            subscribeLatest("shard-001"),
-            subscribeTrimHorizon("shard-002"),
-            subscribeTrimHorizon("shard-003"),
-            subscribeTrimHorizon("shard-004"),
-            subscribeTrimHorizon("shard-005"));
+            Helpers.subscribeLatest("shard-000"),
+            Helpers.subscribeLatest("shard-001"),
+            Helpers.subscribeTrimHorizon("shard-002"),
+            Helpers.subscribeTrimHorizon("shard-003"),
+            Helpers.subscribeTrimHorizon("shard-004"),
+            Helpers.subscribeTrimHorizon("shard-005"));
     assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
     assertTrue(pool.stop());
   }
@@ -92,18 +89,18 @@ public class ShardSubscribersPoolImplTest {
     ShardSubscribersPoolImpl pool =
         new ShardSubscribersPoolImpl(config, kinesis, initialCheckpoint);
     assertTrue(pool.start());
-    List<KinesisRecord> actualRecords = waitForRecords(pool, 77);
+    List<KinesisRecord> actualRecords = Helpers.waitForRecords(pool, 77);
 
     assertEquals(77, actualRecords.size());
     List<SubscribeToShardRequest> expectedSubscribeRequests =
         ImmutableList.of(
-            subscribeLatest("shard-000"),
-            subscribeLatest("shard-001"),
-            subscribeLatest("shard-002"),
-            subscribeLatest("shard-003"),
-            subscribeTrimHorizon("shard-004"),
-            subscribeTrimHorizon("shard-005"),
-            subscribeTrimHorizon("shard-006"));
+            Helpers.subscribeLatest("shard-000"),
+            Helpers.subscribeLatest("shard-001"),
+            Helpers.subscribeLatest("shard-002"),
+            Helpers.subscribeLatest("shard-003"),
+            Helpers.subscribeTrimHorizon("shard-004"),
+            Helpers.subscribeTrimHorizon("shard-005"),
+            Helpers.subscribeTrimHorizon("shard-006"));
     assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
     assertTrue(pool.stop());
   }
@@ -118,16 +115,16 @@ public class ShardSubscribersPoolImplTest {
     ShardSubscribersPoolImpl pool =
         new ShardSubscribersPoolImpl(config, kinesis, initialCheckpoint);
     assertTrue(pool.start());
-    List<KinesisRecord> actualRecords = waitForRecords(pool, 20);
+    List<KinesisRecord> actualRecords = Helpers.waitForRecords(pool, 20);
     assertEquals(20, actualRecords.size());
     List<SubscribeToShardRequest> expectedSubscribeRequests =
         ImmutableList.of(
-            subscribeLatest("shard-000"),
-            subscribeLatest("shard-001"),
-            subscribeSeqNumber("shard-000", "10"),
-            subscribeSeqNumber("shard-001", "20"),
-            subscribeSeqNumber("shard-000", "30"),
-            subscribeSeqNumber("shard-001", "40"));
+            Helpers.subscribeLatest("shard-000"),
+            Helpers.subscribeLatest("shard-001"),
+            Helpers.subscribeSeqNumber("shard-000", "10"),
+            Helpers.subscribeSeqNumber("shard-001", "20"),
+            Helpers.subscribeSeqNumber("shard-000", "30"),
+            Helpers.subscribeSeqNumber("shard-001", "40"));
     assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
     assertTrue(pool.stop());
   }
@@ -141,15 +138,15 @@ public class ShardSubscribersPoolImplTest {
     ShardSubscribersPoolImpl pool =
         new ShardSubscribersPoolImpl(config, kinesis, initialCheckpoint);
     assertTrue(pool.start());
-    Exception e = assertThrows(IOException.class, () -> waitForRecords(pool, 20));
+    Exception e = assertThrows(IOException.class, () -> Helpers.waitForRecords(pool, 20));
     Throwable nestedError = e.getCause().getCause();
     assertTrue(nestedError instanceof RuntimeException);
     assertEquals("Oh..", nestedError.getMessage());
     List<SubscribeToShardRequest> expectedSubscribeRequests =
         ImmutableList.of(
-            subscribeLatest("shard-000"),
-            subscribeLatest("shard-001"),
-            subscribeSeqNumber("shard-000", "10"));
+            Helpers.subscribeLatest("shard-000"),
+            Helpers.subscribeLatest("shard-001"),
+            Helpers.subscribeSeqNumber("shard-000", "10"));
     assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
     // check that there's only one subscribe request for error-ed shard
     long shard01Reconnects =
@@ -157,48 +154,5 @@ public class ShardSubscribersPoolImplTest {
             .filter(r -> r.shardId().equals("shard-001"))
             .count();
     assertEquals(1L, shard01Reconnects);
-  }
-
-  public static List<KinesisRecord> waitForRecords(ShardSubscribersPoolImpl pool, int expectedCnt)
-      throws IOException {
-    List<KinesisRecord> records = new ArrayList<>();
-    int maxAttempts = expectedCnt * 4;
-    int i = 0;
-    while (i < maxAttempts) {
-      CustomOptional<KinesisRecord> r = pool.nextRecord();
-      if (r.isPresent()) {
-        records.add(r.get());
-      }
-      i++;
-    }
-    return records;
-  }
-
-  private static SubscribeToShardRequest subscribeLatest(String shardId) {
-    return SubscribeToShardRequest.builder()
-        .consumerARN("consumer-01")
-        .shardId(shardId)
-        .startingPosition(StartingPosition.builder().type(ShardIteratorType.LATEST).build())
-        .build();
-  }
-
-  private static SubscribeToShardRequest subscribeSeqNumber(String shardId, String seqNumber) {
-    return SubscribeToShardRequest.builder()
-        .consumerARN("consumer-01")
-        .shardId(shardId)
-        .startingPosition(
-            StartingPosition.builder()
-                .type(ShardIteratorType.AFTER_SEQUENCE_NUMBER)
-                .sequenceNumber(seqNumber)
-                .build())
-        .build();
-  }
-
-  private static SubscribeToShardRequest subscribeTrimHorizon(String shardId) {
-    return SubscribeToShardRequest.builder()
-        .consumerARN("consumer-01")
-        .shardId(shardId)
-        .startingPosition(StartingPosition.builder().type(ShardIteratorType.TRIM_HORIZON).build())
-        .build();
   }
 }
