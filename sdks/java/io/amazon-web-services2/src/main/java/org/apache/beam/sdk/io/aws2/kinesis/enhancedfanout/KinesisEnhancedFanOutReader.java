@@ -17,7 +17,7 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
+import static org.apache.beam.sdk.util.Preconditions.checkArgumentNotNull;
 
 import java.io.IOException;
 import java.util.NoSuchElementException;
@@ -26,9 +26,11 @@ import org.apache.beam.sdk.io.aws2.kinesis.CustomOptional;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 
 @SuppressWarnings("unused")
 public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader<KinesisRecord> {
@@ -37,21 +39,21 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
 
   private final KinesisIO.Read spec;
   private final Config config;
-  private final AsyncClientProxy kinesis;
+  private final KinesisAsyncClient kinesis;
   private final KinesisEnhancedFanOutSource source;
   private final CheckpointGenerator checkpointGenerator;
 
-  private CustomOptional<KinesisRecord> currentRecord = CustomOptional.absent();
-  private CustomOptional<ShardSubscribersPool> shardSubscribersPool = CustomOptional.absent();
+  private @Nullable KinesisRecord currentRecord = null;
+  private CustomOptional<EFOShardSubscribersPool> shardSubscribersPool = CustomOptional.absent();
 
   KinesisEnhancedFanOutReader(
       KinesisIO.Read spec,
-      AsyncClientProxy kinesis,
+      KinesisAsyncClient kinesis,
       CheckpointGenerator checkpointGenerator,
       KinesisEnhancedFanOutSource source) {
-    this.spec = checkNotNull(spec, "spec");
-    this.kinesis = checkNotNull(kinesis, "kinesis");
-    this.checkpointGenerator = checkNotNull(checkpointGenerator, "checkpointGenerator");
+    this.spec = checkArgumentNotNull(spec);
+    this.kinesis = checkArgumentNotNull(kinesis);
+    this.checkpointGenerator = checkArgumentNotNull(checkpointGenerator);
     this.source = source;
     this.config = Config.fromIOSpec(spec);
   }
@@ -60,10 +62,11 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
   public boolean start() throws IOException {
     LOG.info("Starting reader using {}", checkpointGenerator);
     try {
-      ShardSubscribersPoolImpl pool = createPool();
-      boolean isRunning = pool.start();
+      EFOShardSubscribersPool pool = createPool();
+      KinesisReaderCheckpoint initialCheckpoint = checkpointGenerator.generate(kinesis);
+      pool.start(initialCheckpoint);
       shardSubscribersPool = CustomOptional.of(pool);
-      return isRunning && advance(); // should return false if no input is currently available
+      return advance(); // should return false if no input is currently available
     } catch (TransientKinesisException e) {
       throw new IOException(e);
     }
@@ -71,23 +74,23 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
 
   @Override
   public boolean advance() throws IOException {
-    currentRecord = shardSubscribersPool.get().nextRecord();
-    return currentRecord.isPresent();
+    currentRecord = shardSubscribersPool.get().getNextRecord();
+    return currentRecord != null;
   }
 
   @Override
   public byte[] getCurrentRecordId() throws NoSuchElementException {
-    return currentRecord.get().getUniqueId();
+    return getOrThrow().getUniqueId();
   }
 
   @Override
   public KinesisRecord getCurrent() throws NoSuchElementException {
-    return currentRecord.get();
+    return getOrThrow();
   }
 
   @Override
   public Instant getCurrentTimestamp() throws NoSuchElementException {
-    return currentRecord.get().getApproximateArrivalTimestamp();
+    return getOrThrow().getApproximateArrivalTimestamp();
   }
 
   @Override
@@ -121,8 +124,15 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
     return source;
   }
 
-  private ShardSubscribersPoolImpl createPool() throws TransientKinesisException {
-    KinesisReaderCheckpoint initialCheckpoint = checkpointGenerator.generate(kinesis);
-    return new ShardSubscribersPoolImpl(config, kinesis, initialCheckpoint);
+  private EFOShardSubscribersPool createPool() throws TransientKinesisException {
+    return new EFOShardSubscribersPool(config, spec, kinesis);
+  }
+
+  private KinesisRecord getOrThrow() throws NoSuchElementException {
+    if (currentRecord != null) {
+      return currentRecord;
+    } else {
+      throw new NoSuchElementException();
+    }
   }
 }

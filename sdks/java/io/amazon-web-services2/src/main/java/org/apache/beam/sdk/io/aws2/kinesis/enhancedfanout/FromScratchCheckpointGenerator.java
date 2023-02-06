@@ -22,10 +22,11 @@ import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 
 /**
  * Creates {@link KinesisReaderCheckpoint} when stored checkpoint is not available or outdated. List
- * of shards is obtained from Kinesis. The result of calling {@link #generate(AsyncClientProxy)}
+ * of shards is obtained from Kinesis. The result of calling {@link #generate(KinesisAsyncClient)}
  * will depend on {@link StartingPoint} provided.
  */
 class FromScratchCheckpointGenerator implements CheckpointGenerator {
@@ -38,7 +39,7 @@ class FromScratchCheckpointGenerator implements CheckpointGenerator {
   }
 
   @Override
-  public KinesisReaderCheckpoint generate(AsyncClientProxy kinesis)
+  public KinesisReaderCheckpoint generate(KinesisAsyncClient kinesis)
       throws TransientKinesisException {
     List<ShardCheckpoint> streamShards =
         ShardsListingUtils.generateShardsCheckpoints(config, kinesis);

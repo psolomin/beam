@@ -21,6 +21,7 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Prec
 
 import java.util.ArrayList;
 import java.util.List;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 
 /**
  * Always returns injected checkpoint. Used when stored checkpoint exists. TODO: add validation to
@@ -43,7 +44,7 @@ class StaticCheckpointGenerator implements CheckpointGenerator {
   }
 
   @Override
-  public KinesisReaderCheckpoint generate(AsyncClientProxy kinesis) {
+  public KinesisReaderCheckpoint generate(KinesisAsyncClient kinesis) {
     return checkpoint;
   }
 

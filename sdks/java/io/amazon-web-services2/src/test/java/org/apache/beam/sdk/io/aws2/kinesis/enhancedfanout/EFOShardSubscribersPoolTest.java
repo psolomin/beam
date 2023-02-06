@@ -17,43 +17,41 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.Helpers.createConfig;
-import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.Helpers.createReadSpec;
+import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.Helpers.createConfig;
+import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.Helpers.createReadSpec;
+import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.RecordsGenerators.eventWithRecords;
 import static org.junit.Assert.assertEquals;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
-import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
-import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.KinesisClientProxyStub;
-import org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers.KinesisStubBehaviours;
 import org.junit.Test;
 
 public class EFOShardSubscribersPoolTest {
   @Test
-  public void poolReSubscribesAndReadsRecords() throws TransientKinesisException, Exception {
+  public void poolReSubscribesAndReadsRecords() throws Exception {
     Config config = createConfig();
     KinesisIO.Read readSpec = createReadSpec();
-    KinesisClientProxyStub kinesis = KinesisStubBehaviours.twoShardsWithRecords();
+    StubbedKinesisAsyncClient kinesis = new StubbedKinesisAsyncClient(10);
+    kinesis.stubSubscribeToShard("shard-000", eventWithRecords(3));
     KinesisReaderCheckpoint initialCheckpoint =
         new FromScratchCheckpointGenerator(config).generate(kinesis);
 
     EFOShardSubscribersPool pool = new EFOShardSubscribersPool(config, readSpec, kinesis);
     pool.start(initialCheckpoint);
-    List<KinesisRecord> actualRecords = waitForRecords(pool, 12);
-    assertEquals(12, actualRecords.size());
+    List<KinesisRecord> actualRecords = waitForRecords(pool, 3);
+    assertEquals(1, actualRecords.size());
+    kinesis.close();
   }
 
-  public static List<KinesisRecord> waitForRecords(EFOShardSubscribersPool pool, int expectedCnt)
-          throws Exception {
+  static List<KinesisRecord> waitForRecords(EFOShardSubscribersPool pool, int expectedCnt)
+      throws Exception {
     List<KinesisRecord> records = new ArrayList<>();
-    int maxAttempts = expectedCnt * 2;
     int i = 0;
-    while (i < maxAttempts) {
-      KinesisRecord r = pool.getNextRecord();
-      Thread.sleep(100);
+    while (i < expectedCnt - 1) {
+      Thread.sleep(20);
+      KinesisRecord r = pool.getNextRecordNonBlocking();
       if (r != null) {
         records.add(r);
       }

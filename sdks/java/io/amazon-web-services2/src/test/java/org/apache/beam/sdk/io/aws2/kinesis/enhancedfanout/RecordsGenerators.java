@@ -15,20 +15,45 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.helpers;
+package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import software.amazon.awssdk.core.SdkBytes;
+import software.amazon.awssdk.services.kinesis.model.Record;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 
-public class RecordsGenerators {
-  static software.amazon.awssdk.services.kinesis.model.Record createRecord(Integer sequenceNumber) {
-    return software.amazon.awssdk.services.kinesis.model.Record.builder()
+class RecordsGenerators {
+  static Record createRecord(Integer sequenceNumber) {
+    return Record.builder()
         .partitionKey("foo")
         .approximateArrivalTimestamp(Instant.now())
         .sequenceNumber(String.valueOf(sequenceNumber))
         .data(SdkBytes.fromByteArray(sequenceNumber.toString().getBytes(UTF_8)))
         .build();
+  }
+
+  // TODO: ugly
+  static SubscribeToShardEvent eventWithRecords(List<Record> recordList) {
+    String lastSeqNum = "0";
+    for (Record r : recordList) {
+      lastSeqNum = r.sequenceNumber();
+    }
+    return SubscribeToShardEvent.builder()
+        .millisBehindLatest(0L)
+        .records(recordList)
+        .continuationSequenceNumber(lastSeqNum)
+        .build();
+  }
+
+  static SubscribeToShardEvent eventWithRecords(int numRecords) {
+    List<Record> records = new ArrayList<>();
+    for (int i = 0; i < numRecords; i++) {
+      records.add(createRecord(i));
+    }
+    return eventWithRecords(records);
   }
 }

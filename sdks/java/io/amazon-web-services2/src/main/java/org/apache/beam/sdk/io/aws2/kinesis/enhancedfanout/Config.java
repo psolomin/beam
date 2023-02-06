@@ -17,7 +17,7 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.Checkers.checkNotNull;
+import static org.apache.beam.sdk.util.Preconditions.checkArgumentNotNull;
 
 import java.io.Serializable;
 import java.time.Instant;
@@ -85,9 +85,9 @@ public class Config implements Serializable {
 
   public static Config fromIOSpec(KinesisIO.Read spec) {
     return new Config(
-        checkNotNull(spec.getStreamName(), "streamName is null"),
-        checkNotNull(spec.getConsumerArn(), "consumer ARN is null"),
-        checkNotNull(spec.getInitialPosition(), "initial position is null"));
+        checkArgumentNotNull(spec.getStreamName(), "streamName is null"),
+        checkArgumentNotNull(spec.getConsumerArn(), "consumer ARN is null"),
+        checkArgumentNotNull(spec.getInitialPosition(), "initial position is null"));
   }
 
   public String getStreamName() {
