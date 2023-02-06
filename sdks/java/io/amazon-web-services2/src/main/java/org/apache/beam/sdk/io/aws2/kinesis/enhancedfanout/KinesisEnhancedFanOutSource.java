@@ -17,7 +17,7 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
-import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.Checkers.checkNotNull;
+import static org.apache.beam.sdk.util.Preconditions.checkArgumentNotNull;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.Lists.newArrayList;
 
 import java.io.IOException;
@@ -49,15 +49,15 @@ public class KinesisEnhancedFanOutSource
       KinesisIO.Read readSpec,
       ClientBuilderFactory builderFactory,
       CheckpointGenerator initialCheckpoint) {
-    this.readSpec = checkNotNull(readSpec, "spec");
+    this.readSpec = checkArgumentNotNull(readSpec);
     this.builderFactory = builderFactory;
-    this.checkpointGenerator = checkNotNull(initialCheckpoint, "initialCheckpoint");
+    this.checkpointGenerator = checkArgumentNotNull(initialCheckpoint);
   }
 
   @Override
   public List<KinesisEnhancedFanOutSource> split(int desiredNumSplits, PipelineOptions options)
       throws Exception {
-    try (AsyncClientProxy kinesis = createClient()) {
+    try (KinesisAsyncClient kinesis = createClient()) {
       KinesisReaderCheckpoint checkpoint = checkpointGenerator.generate(kinesis);
       List<KinesisEnhancedFanOutSource> sources = newArrayList();
       for (KinesisReaderCheckpoint partition : checkpoint.splitInto(desiredNumSplits)) {
@@ -92,13 +92,12 @@ public class KinesisEnhancedFanOutSource
     return KinesisRecordCoder.of();
   }
 
-  private AsyncClientProxy createClient() {
-    return new AsyncClientProxyImpl(
-        builderFactory
-            .create(
-                KinesisClientUtil.adjustKinesisClientBuilder(KinesisAsyncClient.builder()),
-                checkNotNull(readSpec.getClientConfiguration(), "clientConfiguration"),
-                null) // builderFactory already created with AwsOptions
-            .build());
+  private KinesisAsyncClient createClient() {
+    return builderFactory
+        .create(
+            KinesisClientUtil.adjustKinesisClientBuilder(KinesisAsyncClient.builder()),
+            checkArgumentNotNull(readSpec.getClientConfiguration()),
+            null) // builderFactory already created with AwsOptions
+        .build();
   }
 }

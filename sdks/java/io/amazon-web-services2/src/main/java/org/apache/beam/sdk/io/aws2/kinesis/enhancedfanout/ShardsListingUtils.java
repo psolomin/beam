@@ -24,6 +24,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
 import software.amazon.awssdk.services.kinesis.model.Shard;
@@ -40,7 +41,7 @@ public class ShardsListingUtils {
    * we need to consume all backlog from closed shards too.
    */
   static List<Shard> getShardsAfterParent(
-      String parentShardId, Config config, AsyncClientProxy kinesis) {
+      String parentShardId, Config config, KinesisAsyncClient kinesis) {
     ListShardsRequest listShardsRequest =
         ListShardsRequest.builder()
             .streamName(config.getStreamName())
@@ -50,7 +51,8 @@ public class ShardsListingUtils {
     return tryListingShards(listShardsRequest, kinesis).shards();
   }
 
-  static List<ShardCheckpoint> generateShardsCheckpoints(Config config, AsyncClientProxy kinesis) {
+  static List<ShardCheckpoint> generateShardsCheckpoints(
+      Config config, KinesisAsyncClient kinesis) {
     ListShardsRequest listShardsRequest =
         ListShardsRequest.builder()
             .streamName(config.getStreamName())
@@ -70,7 +72,7 @@ public class ShardsListingUtils {
   }
 
   private static ListShardsResponse tryListingShards(
-      ListShardsRequest listShardsRequest, AsyncClientProxy kinesis) {
+      ListShardsRequest listShardsRequest, KinesisAsyncClient kinesis) {
     try {
       ListShardsResponse response =
           kinesis.listShards(listShardsRequest).get(shardListingTimeoutMs, TimeUnit.MILLISECONDS);

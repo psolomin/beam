@@ -17,28 +17,28 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
+import static org.apache.beam.sdk.util.Preconditions.checkArgumentNotNull;
+
 import io.netty.channel.ChannelException;
+import io.netty.handler.timeout.ReadTimeoutException;
 import java.nio.channels.ClosedChannelException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
-
-import io.netty.handler.timeout.ReadTimeoutException;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import software.amazon.awssdk.core.exception.SdkException;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.awssdk.services.kinesis.model.StartingPosition;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEventStream;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
-
-import static org.apache.beam.sdk.util.Preconditions.checkArgumentNotNull;
 
 class EFOShardSubscriber {
   // TODO: get rid of these 2?
@@ -48,7 +48,7 @@ class EFOShardSubscriber {
   private final String consumerArn;
   private final String shardId;
   // Read configuration
-  private final AsyncClientProxy kinesis;
+  private final KinesisAsyncClient kinesis;
 
   /** Signals if subscriber is stopped from externally. */
   volatile boolean isStopped = false;
@@ -132,7 +132,7 @@ class EFOShardSubscriber {
       EFOShardSubscribersPool pool,
       String shardId,
       KinesisIO.Read read,
-      AsyncClientProxy kinesis) {
+      KinesisAsyncClient kinesis) {
     this.pool = pool;
     this.consumerArn = checkArgumentNotNull(read.getConsumerArn());
     this.shardId = shardId;
