@@ -17,6 +17,8 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
+import static org.apache.beam.sdk.util.Preconditions.checkArgumentNotNull;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,6 +32,7 @@ import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
+import org.apache.beam.sdk.io.aws2.kinesis.KinesisReaderCheckpoint;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint;
 import org.apache.beam.sdk.util.Preconditions;
@@ -46,8 +49,6 @@ import software.amazon.awssdk.services.kinesis.model.StartingPosition;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
-
-import static org.apache.beam.sdk.util.Preconditions.checkArgumentNotNull;
 
 /**
  * TODO: - switch to existing ShardCheckpoint - we don't care what consumer name was, we want to
@@ -147,10 +148,11 @@ class EFOShardSubscribersPool {
         ch -> {
           EFOShardSubscriber subscriber =
               new EFOShardSubscriber(this, ch.getShardId(), read, kinesis);
-          StartingPosition startingPosition = StartingPosition.builder()
-                          .type(ShardIteratorType.AFTER_SEQUENCE_NUMBER)
-                                  .sequenceNumber(ch.getSequenceNumber())
-                                          .build();
+          StartingPosition startingPosition =
+              StartingPosition.builder()
+                  .type(ShardIteratorType.AFTER_SEQUENCE_NUMBER)
+                  .sequenceNumber(ch.getSequenceNumber())
+                  .build();
           subscriber.subscribe(startingPosition).whenCompleteAsync(errorHandler);
           ShardState shardState = new ShardState(subscriber);
           state.putIfAbsent(ch.getShardId(), shardState);
@@ -160,7 +162,7 @@ class EFOShardSubscribersPool {
   /**
    * FIXME: this has some bug
    *
-   * Returns the next deaggregated {@link KinesisRecord} if available and updates {@link #state}
+   * <p>Returns the next deaggregated {@link KinesisRecord} if available and updates {@link #state}
    * accordingly so that it reflects a mutable checkpoint AFTER returning that record.
    *
    * <p>Async subscription errors are delayed until {@link #eventQueue} is completely drained and
