@@ -45,6 +45,8 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
+import static org.apache.beam.sdk.util.Preconditions.checkArgumentNotNull;
+
 /**
  * TODO: - switch to existing ShardCheckpoint - we don't care what consumer name was, we want to
  * switch back and forth from / to EFO - back-fill - EFO consumer, then use normal consumer to keep
@@ -64,6 +66,7 @@ import software.amazon.kinesis.retrieval.KinesisClientRecord;
  * internally - we can think of this later, add any custom back offs as late as possible - ?
  * recommend in javadoc to use large initial back offs ?
  */
+@SuppressWarnings({"nullness"})
 class EFOShardSubscribersPool {
   private static final Logger LOG = LoggerFactory.getLogger(EFOShardSubscribersPool.class);
 
@@ -149,6 +152,8 @@ class EFOShardSubscribersPool {
   }
 
   /**
+   * FIXME: this has some bug
+   *
    * Returns the next deaggregated {@link KinesisRecord} if available and updates {@link #state}
    * accordingly so that it reflects a mutable checkpoint AFTER returning that record.
    *
@@ -182,7 +187,7 @@ class EFOShardSubscribersPool {
       if (current != null) {
         String shardId = current.shardId;
         ShardState shardState = Preconditions.checkStateNotNull(state.get(shardId));
-        if (current.hasNext()) {
+        if (current != null && current.hasNext()) {
           KinesisClientRecord r = current.next();
           if (!current.hasNext()) {
             onEventDone(shardState, current);
@@ -191,43 +196,12 @@ class EFOShardSubscribersPool {
           shardState.update(r);
           return new KinesisRecord(r, config.getStreamName(), shardId);
         } else {
-          onEventDone(shardState, current);
+          onEventDone(shardState, checkArgumentNotNull(current));
           shardState.update(current);
           current = null;
         }
       }
     }
-  }
-
-  @Nullable
-  KinesisRecord getNextRecordNonBlocking() throws IOException {
-    if (current == null && eventQueue.isEmpty()) {
-      if (subscriptionError == null) {
-        return null;
-      } else {
-        throw new IOException(subscriptionError);
-      }
-    }
-
-    current = eventQueue.poll();
-    if (current != null) {
-      String shardId = current.shardId;
-      ShardState shardState = Preconditions.checkStateNotNull(state.get(shardId));
-      if (current.hasNext()) {
-        KinesisClientRecord r = current.next();
-        if (!current.hasNext()) {
-          onEventDone(shardState, current);
-          current = null;
-        }
-        shardState.update(r);
-        return new KinesisRecord(r, config.getStreamName(), shardId);
-      } else {
-        onEventDone(shardState, current);
-        shardState.update(current);
-        current = null;
-      }
-    }
-    return null;
   }
 
   /**
