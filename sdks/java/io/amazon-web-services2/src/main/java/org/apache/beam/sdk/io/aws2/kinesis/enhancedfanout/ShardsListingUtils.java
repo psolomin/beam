@@ -22,6 +22,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
+
+import org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -65,7 +67,6 @@ public class ShardsListingUtils {
             s ->
                 new ShardCheckpoint(
                     config.getStreamName(),
-                    config.getConsumerArn(),
                     s.shardId(),
                     config.getStartingPoint()))
         .collect(Collectors.toList());

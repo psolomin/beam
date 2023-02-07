@@ -25,6 +25,7 @@ import java.io.Serializable;
 import java.util.Iterator;
 import java.util.List;
 import org.apache.beam.sdk.io.UnboundedSource;
+import org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 
 /**

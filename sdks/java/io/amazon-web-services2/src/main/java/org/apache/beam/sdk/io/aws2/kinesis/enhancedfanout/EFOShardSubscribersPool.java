@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
+import org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint;
 import org.apache.beam.sdk.util.Preconditions;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ForwardingIterator;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
@@ -41,6 +42,7 @@ import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
+import software.amazon.awssdk.services.kinesis.model.StartingPosition;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
@@ -145,7 +147,11 @@ class EFOShardSubscribersPool {
         ch -> {
           EFOShardSubscriber subscriber =
               new EFOShardSubscriber(this, ch.getShardId(), read, kinesis);
-          subscriber.subscribe(ch.toStartingPosition()).whenCompleteAsync(errorHandler);
+          StartingPosition startingPosition = StartingPosition.builder()
+                          .type(ShardIteratorType.AFTER_SEQUENCE_NUMBER)
+                                  .sequenceNumber(ch.getSequenceNumber())
+                                          .build();
+          subscriber.subscribe(startingPosition).whenCompleteAsync(errorHandler);
           ShardState shardState = new ShardState(subscriber);
           state.putIfAbsent(ch.getShardId(), shardState);
         });

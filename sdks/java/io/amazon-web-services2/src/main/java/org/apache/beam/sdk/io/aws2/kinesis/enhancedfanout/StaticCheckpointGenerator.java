@@ -21,6 +21,8 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Prec
 
 import java.util.ArrayList;
 import java.util.List;
+
+import org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 
 /**
@@ -34,12 +36,7 @@ class StaticCheckpointGenerator implements CheckpointGenerator {
   public StaticCheckpointGenerator(KinesisReaderCheckpoint checkpoint) {
     checkNotNull(checkpoint, "checkpoint");
     List<ShardCheckpoint> result = new ArrayList<>();
-    checkpoint.forEach(
-        chk -> {
-          if (!chk.isOrphan()) {
-            result.add(chk);
-          }
-        });
+    checkpoint.forEach(result::add);
     this.checkpoint = new KinesisReaderCheckpoint(result);
   }
 
