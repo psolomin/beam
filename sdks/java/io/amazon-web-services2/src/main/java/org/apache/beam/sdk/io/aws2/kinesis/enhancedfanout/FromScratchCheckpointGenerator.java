@@ -18,7 +18,7 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import java.util.List;
-
+import org.apache.beam.sdk.io.aws2.kinesis.KinesisReaderCheckpoint;
 import org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint;
 import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;

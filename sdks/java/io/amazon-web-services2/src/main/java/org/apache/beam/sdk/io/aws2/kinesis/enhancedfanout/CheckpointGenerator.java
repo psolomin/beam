@@ -18,6 +18,7 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import java.io.Serializable;
+import org.apache.beam.sdk.io.aws2.kinesis.KinesisReaderCheckpoint;
 import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 
