@@ -41,11 +41,10 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 
 class EFOShardSubscriber {
-  // TODO: get rid of these 2?
   private final EFOShardSubscribersPool pool;
+  private final String consumerArn;
 
   // Shard id of this subscriber
-  private final String consumerArn;
   private final String shardId;
   // Read configuration
   private final KinesisAsyncClient kinesis;

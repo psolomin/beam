@@ -51,7 +51,7 @@ public class EFOShardSubscribersPoolTest {
     int i = 0;
     while (i < expectedCnt - 1) {
       Thread.sleep(20);
-      KinesisRecord r = pool.getNextRecordNonBlocking();
+      KinesisRecord r = pool.getNextRecord();
       if (r != null) {
         records.add(r);
       }
