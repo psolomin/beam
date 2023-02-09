@@ -20,7 +20,6 @@ package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 import static org.apache.beam.sdk.util.Preconditions.checkArgumentNotNull;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -35,6 +34,8 @@ import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisReaderCheckpoint;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint;
+import org.apache.beam.sdk.io.aws2.kinesis.WatermarkPolicy;
+import org.apache.beam.sdk.io.aws2.kinesis.WatermarkPolicyFactory;
 import org.apache.beam.sdk.util.Preconditions;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ForwardingIterator;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
@@ -122,6 +123,9 @@ class EFOShardSubscribersPool {
   // EventRecords iterator that is currently consumed
   @Nullable EventRecords current = null;
 
+  private final WatermarkPolicy latestRecordTimestampPolicy =
+      WatermarkPolicyFactory.withArrivalTimePolicy().createWatermarkPolicy();
+
   EFOShardSubscribersPool(Config config, KinesisIO.Read readSpec, KinesisAsyncClient kinesis) {
     this.poolId = UUID.randomUUID();
     this.config = config;
@@ -137,22 +141,17 @@ class EFOShardSubscribersPool {
    */
   @SuppressWarnings("FutureReturnValueIgnored")
   public void start(Iterable<ShardCheckpoint> checkpoints) {
-    List<String> startingWithShards = checkpointToShardsIds(checkpoints);
     LOG.info(
-        "Starting pool {} {} {}. Shards = {}",
+        "Starting pool {} {} {}. Checkpoints = {}",
         poolId,
         config.getStreamName(),
         config.getConsumerArn(),
-        startingWithShards);
+        checkpoints);
     checkpoints.forEach(
         ch -> {
           EFOShardSubscriber subscriber =
               new EFOShardSubscriber(this, ch.getShardId(), read, kinesis);
-          StartingPosition startingPosition =
-              StartingPosition.builder()
-                  .type(ShardIteratorType.AFTER_SEQUENCE_NUMBER)
-                  .sequenceNumber(ch.getSequenceNumber())
-                  .build();
+          StartingPosition startingPosition = ch.toStartingPosition();
           subscriber.subscribe(startingPosition).whenCompleteAsync(errorHandler);
           ShardState shardState = new ShardState(subscriber);
           state.putIfAbsent(ch.getShardId(), shardState);
@@ -202,7 +201,9 @@ class EFOShardSubscribersPool {
             current = null;
           }
           shardState.update(r);
-          return new KinesisRecord(r, config.getStreamName(), shardId);
+          KinesisRecord kinesisRecord = new KinesisRecord(r, config.getStreamName(), shardId);
+          latestRecordTimestampPolicy.update(kinesisRecord);
+          return kinesisRecord;
         } else {
           onEventDone(shardState, checkArgumentNotNull(current));
           shardState.update(current);
@@ -238,11 +239,24 @@ class EFOShardSubscribersPool {
   }
 
   public Instant getWatermark() {
-    return Instant.EPOCH;
+    return latestRecordTimestampPolicy.getWatermark();
   }
 
+  // TODO: handle case when no records passed, but there was a re-shard
   public UnboundedSource.CheckpointMark getCheckpointMark() {
-    return new KinesisReaderCheckpoint(Collections.EMPTY_LIST);
+    List<ShardCheckpoint> checkpoints =
+        state.entrySet().stream()
+            .map(
+                entry ->
+                    new ShardCheckpoint(
+                        read.getStreamName(),
+                        entry.getKey(),
+                        ShardIteratorType.AFTER_SEQUENCE_NUMBER,
+                        entry.getValue().sequenceNumber,
+                        entry.getValue().subSequenceNumber))
+            .collect(Collectors.toList());
+
+    return new KinesisReaderCheckpoint(checkpoints);
   }
 
   public boolean stop() {
@@ -313,12 +327,6 @@ class EFOShardSubscribersPool {
       }
       return delegate;
     }
-  }
-
-  private List<String> checkpointToShardsIds(Iterable<ShardCheckpoint> checkpoints) {
-    List<String> result = new ArrayList<>();
-    checkpoints.forEach(chk -> result.add(chk.getShardId()));
-    return Collections.unmodifiableList(result);
   }
 
   UUID getPoolId() {
