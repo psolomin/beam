@@ -27,6 +27,7 @@ import java.io.Serializable;
 import org.joda.time.Instant;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
+import software.amazon.awssdk.services.kinesis.model.StartingPosition;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -178,7 +179,17 @@ public class ShardCheckpoint implements Serializable {
     return shardId;
   }
 
-  public String getSequenceNumber() {
-    return sequenceNumber;
+  public StartingPosition toStartingPosition() {
+    StartingPosition.Builder builder = StartingPosition.builder().type(shardIteratorType);
+    switch (shardIteratorType) {
+      case AT_TIMESTAMP:
+        return builder.timestamp(TimeUtil.toJava(checkNotNull(timestamp, "timestamp"))).build();
+      case AT_SEQUENCE_NUMBER:
+      case AFTER_SEQUENCE_NUMBER:
+        return builder.sequenceNumber(checkNotNull(sequenceNumber, "sequenceNumber")).build();
+
+      default:
+        return builder.build();
+    }
   }
 }
