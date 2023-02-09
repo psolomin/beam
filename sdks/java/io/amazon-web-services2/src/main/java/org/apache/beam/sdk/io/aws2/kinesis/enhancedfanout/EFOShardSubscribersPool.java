@@ -17,6 +17,7 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.apache.beam.sdk.util.Preconditions.checkArgumentNotNull;
 
 import java.io.IOException;
@@ -25,9 +26,13 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
@@ -119,6 +124,8 @@ class EFOShardSubscribersPool {
           state.forEach((k, v) -> v.subscriber.cancel());
         }
       };
+
+  private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
   // EventRecords iterator that is currently consumed
   @Nullable EventRecords current = null;
@@ -259,7 +266,9 @@ class EFOShardSubscribersPool {
     return new KinesisReaderCheckpoint(checkpoints);
   }
 
-  public boolean stop() {
+  // TODO:
+  public boolean stop() throws InterruptedException {
+    state.forEach((shardId, st) -> st.subscriber.cancel());
     return true;
   }
 
@@ -331,5 +340,18 @@ class EFOShardSubscribersPool {
 
   UUID getPoolId() {
     return poolId;
+  }
+
+  @SuppressWarnings("FutureReturnValueIgnored")
+  <T> CompletableFuture<T> delayedTask(Supplier<CompletableFuture<T>> task, long delayMs) {
+    if (delayMs <= 0) {
+      return task.get();
+    }
+    final CompletableFuture<T> cf = new CompletableFuture<>();
+    scheduler.schedule(
+        () -> task.get().handle((t, e) -> e == null ? cf.complete(t) : cf.completeExceptionally(e)),
+        delayMs,
+        MILLISECONDS);
+    return cf;
   }
 }
