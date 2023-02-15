@@ -18,7 +18,6 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static org.apache.beam.sdk.util.Preconditions.checkArgumentNotNull;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -188,36 +187,38 @@ class EFOShardSubscribersPool {
    */
   @Nullable
   KinesisRecord getNextRecord() throws IOException {
-    while (true) {
-      if (current == null && eventQueue.isEmpty()) {
-        if (subscriptionError == null) {
-          return null;
-        } else {
-          throw new IOException(subscriptionError);
-        }
-      }
-
-      current = eventQueue.poll();
-      if (current != null) {
-        String shardId = current.shardId;
-        ShardState shardState = Preconditions.checkStateNotNull(state.get(shardId));
-        if (current != null && current.hasNext()) {
-          KinesisClientRecord r = current.next();
-          if (!current.hasNext()) {
-            onEventDone(shardState, current);
-            current = null;
-          }
-          shardState.update(r);
-          KinesisRecord kinesisRecord = new KinesisRecord(r, config.getStreamName(), shardId);
-          latestRecordTimestampPolicy.update(kinesisRecord);
-          return kinesisRecord;
-        } else {
-          onEventDone(shardState, checkArgumentNotNull(current));
-          shardState.update(current);
-          current = null;
-        }
+    if (current == null && eventQueue.isEmpty()) {
+      if (subscriptionError == null) {
+        return null;
+      } else {
+        throw new IOException(subscriptionError);
       }
     }
+
+    if (current == null) {
+      current = eventQueue.poll();
+    }
+
+    if (current != null) {
+      String shardId = current.shardId;
+      ShardState shardState = Preconditions.checkStateNotNull(state.get(shardId));
+      if (current != null && current.hasNext()) {
+        KinesisClientRecord r = current.next();
+        if (!current.hasNext()) {
+          onEventDone(shardState, current);
+          current = null;
+        }
+        shardState.update(r);
+        KinesisRecord kinesisRecord = new KinesisRecord(r, config.getStreamName(), shardId);
+        latestRecordTimestampPolicy.update(kinesisRecord);
+        return kinesisRecord;
+      } else {
+        onEventDone(shardState, current);
+        shardState.update(current);
+        current = null;
+      }
+    }
+    return null;
   }
 
   /**
