@@ -36,13 +36,14 @@ public class EFOShardSubscribersPoolTest {
     KinesisIO.Read readSpec = createReadSpec();
     StubbedKinesisAsyncClient kinesis = new StubbedKinesisAsyncClient(10);
     kinesis.stubSubscribeToShard("shard-000", eventWithRecords(3));
+    kinesis.stubSubscribeToShard("shard-001", eventWithRecords(3));
     KinesisReaderCheckpoint initialCheckpoint =
         new FromScratchCheckpointGenerator(config).generate(kinesis);
 
     EFOShardSubscribersPool pool = new EFOShardSubscribersPool(config, readSpec, kinesis);
     pool.start(initialCheckpoint);
-    List<KinesisRecord> actualRecords = waitForRecords(pool, 3);
-    assertEquals(1, actualRecords.size());
+    List<KinesisRecord> actualRecords = waitForRecords(pool, 6);
+    assertEquals(6, actualRecords.size());
     kinesis.close();
   }
 
@@ -50,7 +51,7 @@ public class EFOShardSubscribersPoolTest {
       throws Exception {
     List<KinesisRecord> records = new ArrayList<>();
     int i = 0;
-    while (i < expectedCnt - 1) {
+    while (i < expectedCnt) {
       Thread.sleep(20);
       KinesisRecord r = pool.getNextRecord();
       if (r != null) {

@@ -85,7 +85,7 @@ class EFOShardSubscriber {
   private static final Long ON_ERROR_COOL_DOWN_MS = 5_000L;
 
   /**
-   * TODO: add 2 other retry-able cases
+   * TODO: add 2 other retry-able cases.
    *
    * @param error
    * @return
@@ -104,7 +104,7 @@ class EFOShardSubscriber {
   }
 
   /**
-   * Loops through completion exceptions until we get the underlying cause
+   * Loops through completion exceptions until we get the underlying cause.
    *
    * @param completionException
    * @return
@@ -220,7 +220,7 @@ class EFOShardSubscriber {
     }
   }
 
-  /** Subscriber to the Kinesis event stream */
+  /** Subscriber to the Kinesis event stream. */
   private class ShardEventsSubscriber
       implements Subscriber<SubscribeToShardEventStream>, SubscribeToShardResponseHandler.Visitor {
     /** Tracks continuation sequence number. */
@@ -269,7 +269,7 @@ class EFOShardSubscriber {
       }
     }
 
-    /** Delegates to {@link #visit} */
+    /** Delegates to {@link #visit}. */
     @Override
     public void onNext(SubscribeToShardEventStream event) {
       event.accept(this);
