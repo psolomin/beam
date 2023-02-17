@@ -21,11 +21,13 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -47,8 +49,13 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHan
 class StubbedKinesisAsyncClient implements KinesisAsyncClient {
 
   private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+
   private final int publisherRateMs;
+
   private final Map<String, Deque<StubbedSdkPublisher>> stubbedPublishers = new HashMap<>();
+
+  private final ConcurrentLinkedQueue<SubscribeToShardRequest> subscribeRequestsSeen =
+      new ConcurrentLinkedQueue<>();
 
   StubbedKinesisAsyncClient(int publisherRateMs) {
     this.publisherRateMs = publisherRateMs;
@@ -67,6 +74,7 @@ class StubbedKinesisAsyncClient implements KinesisAsyncClient {
   @Override
   public CompletableFuture<Void> subscribeToShard(
       SubscribeToShardRequest req, SubscribeToShardResponseHandler resp) {
+    subscribeRequestsSeen.add(req);
     Deque<StubbedSdkPublisher> publishers =
         checkNotNull(stubbedPublishers.get(req.shardId()), "Not stubbed");
     StubbedSdkPublisher publisher = checkNotNull(publishers.poll(), "No more stubs");
@@ -156,5 +164,9 @@ class StubbedKinesisAsyncClient implements KinesisAsyncClient {
             }
           });
     }
+  }
+
+  public List<SubscribeToShardRequest> subscribeRequestsSeen() {
+    return new ArrayList<>(subscribeRequestsSeen);
   }
 }

@@ -52,7 +52,7 @@ class Helpers {
         .build();
   }
 
-  static SubscribeToShardRequest subscribeSeqNumber(String shardId, String seqNumber) {
+  static SubscribeToShardRequest subscribeAfterSeqNumber(String shardId, String seqNumber) {
     return SubscribeToShardRequest.builder()
         .consumerARN("consumer-01")
         .shardId(shardId)

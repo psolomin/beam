@@ -147,7 +147,7 @@ class EFOShardSubscriber {
                   () ->
                       subscribe(
                           StartingPosition.builder()
-                              .type(ShardIteratorType.AT_SEQUENCE_NUMBER)
+                              .type(ShardIteratorType.AFTER_SEQUENCE_NUMBER)
                               .sequenceNumber(lastContinuationSequenceNumber)
                               .build()),
                   delay);
