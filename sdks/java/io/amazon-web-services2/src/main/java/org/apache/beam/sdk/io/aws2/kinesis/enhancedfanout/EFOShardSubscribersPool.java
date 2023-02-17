@@ -33,7 +33,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisReaderCheckpoint;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
@@ -251,7 +250,7 @@ class EFOShardSubscribersPool {
   }
 
   // TODO: handle case when no records passed, but there was a re-shard
-  public UnboundedSource.CheckpointMark getCheckpointMark() {
+  public KinesisReaderCheckpoint getCheckpointMark() {
     List<ShardCheckpoint> checkpoints =
         state.entrySet().stream()
             .map(

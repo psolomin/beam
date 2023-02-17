@@ -24,6 +24,7 @@ import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AT
 import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AT_TIMESTAMP;
 
 import java.io.Serializable;
+import java.util.Objects;
 import org.joda.time.Instant;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
@@ -191,5 +192,24 @@ public class ShardCheckpoint implements Serializable {
       default:
         return builder.build();
     }
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    ShardCheckpoint that = (ShardCheckpoint) o;
+    return streamName.equals(that.streamName)
+        && shardId.equals(that.shardId)
+        && Objects.equals(sequenceNumber, that.sequenceNumber)
+        && shardIteratorType == that.shardIteratorType
+        && Objects.equals(subSequenceNumber, that.subSequenceNumber)
+        && Objects.equals(timestamp, that.timestamp);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(
+        streamName, shardId, sequenceNumber, shardIteratorType, subSequenceNumber, timestamp);
   }
 }
