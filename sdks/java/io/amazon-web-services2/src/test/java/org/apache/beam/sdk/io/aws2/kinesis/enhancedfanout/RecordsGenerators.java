@@ -49,9 +49,20 @@ class RecordsGenerators {
         .build();
   }
 
+  static SubscribeToShardEvent eventWithOutRecords(int sequenceNumber) {
+    return SubscribeToShardEvent.builder()
+        .millisBehindLatest(0L)
+        .continuationSequenceNumber(String.valueOf(sequenceNumber))
+        .build();
+  }
+
   static SubscribeToShardEvent eventWithRecords(int numRecords) {
+    return eventWithRecords(0, numRecords);
+  }
+
+  static SubscribeToShardEvent eventWithRecords(int startSeqNumber, int numRecords) {
     List<Record> records = new ArrayList<>();
-    for (int i = 0; i < numRecords; i++) {
+    for (int i = startSeqNumber; i < startSeqNumber + numRecords; i++) {
       records.add(createRecord(i));
     }
     return eventWithRecords(records);

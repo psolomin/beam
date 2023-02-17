@@ -17,8 +17,10 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
+import static junit.framework.TestCase.assertTrue;
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.Helpers.createConfig;
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.Helpers.createReadSpec;
+import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.RecordsGenerators.eventWithOutRecords;
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.RecordsGenerators.eventWithRecords;
 import static org.junit.Assert.assertEquals;
 
@@ -27,7 +29,9 @@ import java.util.List;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisReaderCheckpoint;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 import org.junit.Test;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 
 public class EFOShardSubscribersPoolTest {
   @Test
@@ -36,15 +40,36 @@ public class EFOShardSubscribersPoolTest {
     KinesisIO.Read readSpec = createReadSpec();
     StubbedKinesisAsyncClient kinesis = new StubbedKinesisAsyncClient(10);
     kinesis.stubSubscribeToShard("shard-000", eventWithRecords(3));
+    kinesis.stubSubscribeToShard("shard-000", eventWithRecords(3, 7));
+    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(10));
+    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(11));
+    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(12));
+
     kinesis.stubSubscribeToShard("shard-001", eventWithRecords(3));
+    kinesis.stubSubscribeToShard("shard-001", eventWithRecords(3, 5));
+    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(8));
+    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(9));
+    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(11));
+
     KinesisReaderCheckpoint initialCheckpoint =
         new FromScratchCheckpointGenerator(config).generate(kinesis);
 
     EFOShardSubscribersPool pool = new EFOShardSubscribersPool(config, readSpec, kinesis);
     pool.start(initialCheckpoint);
-    List<KinesisRecord> actualRecords = waitForRecords(pool, 6);
-    assertEquals(6, actualRecords.size());
+    List<KinesisRecord> actualRecords = waitForRecords(pool, 18);
+    assertEquals(18, actualRecords.size());
     kinesis.close();
+    assertTrue(pool.stop());
+
+    List<SubscribeToShardRequest> expectedSubscribeRequests =
+        ImmutableList.of(
+            Helpers.subscribeLatest("shard-000"),
+            Helpers.subscribeLatest("shard-001"),
+            Helpers.subscribeAfterSeqNumber("shard-000", "2"),
+            Helpers.subscribeAfterSeqNumber("shard-001", "2"),
+            Helpers.subscribeAfterSeqNumber("shard-000", "9"),
+            Helpers.subscribeAfterSeqNumber("shard-001", "7"));
+    assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
   }
 
   static List<KinesisRecord> waitForRecords(EFOShardSubscribersPool pool, int expectedCnt)
