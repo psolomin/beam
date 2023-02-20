@@ -18,7 +18,6 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import static junit.framework.TestCase.assertTrue;
-import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.Helpers.createConfig;
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.Helpers.createReadSpec;
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.RecordsGenerators.eventWithOutRecords;
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.RecordsGenerators.eventWithRecords;
@@ -45,7 +44,6 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 public class EFOShardSubscribersPoolTest {
   @Test
   public void poolReSubscribesAndReadsRecords() throws Exception {
-    Config config = createConfig();
     KinesisIO.Read readSpec = createReadSpec();
     StubbedKinesisAsyncClient kinesis = new StubbedKinesisAsyncClient(10);
     kinesis.stubSubscribeToShard("shard-000", eventWithRecords(3));
@@ -61,9 +59,9 @@ public class EFOShardSubscribersPoolTest {
     kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(11));
 
     KinesisReaderCheckpoint initialCheckpoint =
-        new FromScratchCheckpointGenerator(config).generate(kinesis);
+        new FromScratchCheckpointGenerator(readSpec).generate(kinesis);
 
-    EFOShardSubscribersPool pool = new EFOShardSubscribersPool(config, readSpec, kinesis);
+    EFOShardSubscribersPool pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);
     List<KinesisRecord> actualRecords = waitForRecords(pool, 18);
     assertEquals(18, actualRecords.size());
@@ -91,7 +89,6 @@ public class EFOShardSubscribersPoolTest {
 
   @Test
   public void poolReSubscribesWhenNoRecordsCome() throws Exception {
-    Config config = createConfig();
     KinesisIO.Read readSpec = createReadSpec();
     StubbedKinesisAsyncClient kinesis = new StubbedKinesisAsyncClient(10);
     kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(31));
@@ -103,9 +100,9 @@ public class EFOShardSubscribersPoolTest {
     kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(11));
 
     KinesisReaderCheckpoint initialCheckpoint =
-        new FromScratchCheckpointGenerator(config).generate(kinesis);
+        new FromScratchCheckpointGenerator(readSpec).generate(kinesis);
 
-    EFOShardSubscribersPool pool = new EFOShardSubscribersPool(config, readSpec, kinesis);
+    EFOShardSubscribersPool pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);
     List<KinesisRecord> actualRecords = waitForRecords(pool, 6);
     assertEquals(0, actualRecords.size());
@@ -125,7 +122,6 @@ public class EFOShardSubscribersPoolTest {
 
   @Test
   public void poolReSubscribesWhenRecoverableErrorOccurs() throws Exception {
-    Config config = createConfig();
     KinesisIO.Read readSpec = createReadSpec();
     StubbedKinesisAsyncClient kinesis = new StubbedKinesisAsyncClient(10);
     kinesis
@@ -146,9 +142,9 @@ public class EFOShardSubscribersPoolTest {
     kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(11));
 
     KinesisReaderCheckpoint initialCheckpoint =
-        new FromScratchCheckpointGenerator(config).generate(kinesis);
+        new FromScratchCheckpointGenerator(readSpec).generate(kinesis);
 
-    EFOShardSubscribersPool pool = new EFOShardSubscribersPool(config, readSpec, kinesis, 1L);
+    EFOShardSubscribersPool pool = new EFOShardSubscribersPool(readSpec, kinesis, 1L);
     pool.start(initialCheckpoint);
     List<KinesisRecord> actualRecords = waitForRecords(pool, 18);
     assertEquals(18, actualRecords.size());
@@ -176,7 +172,6 @@ public class EFOShardSubscribersPoolTest {
 
   @Test
   public void poolFailsWhenNonRecoverableErrorOccurs() throws Exception {
-    Config config = createConfig();
     KinesisIO.Read readSpec = createReadSpec();
     StubbedKinesisAsyncClient kinesis = new StubbedKinesisAsyncClient(10);
     kinesis
@@ -194,9 +189,9 @@ public class EFOShardSubscribersPoolTest {
     kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(11));
 
     KinesisReaderCheckpoint initialCheckpoint =
-        new FromScratchCheckpointGenerator(config).generate(kinesis);
+        new FromScratchCheckpointGenerator(readSpec).generate(kinesis);
 
-    EFOShardSubscribersPool pool = new EFOShardSubscribersPool(config, readSpec, kinesis);
+    EFOShardSubscribersPool pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);
     Throwable exception = assertThrows(IOException.class, () -> waitForRecords(pool, 10));
     assertEquals("java.lang.RuntimeException: Oh...", exception.getMessage());
@@ -207,7 +202,6 @@ public class EFOShardSubscribersPoolTest {
 
   @Test
   public void poolFailsWhenConsumerDoesNotExist() throws Exception {
-    Config config = createConfig();
     KinesisIO.Read readSpec = createReadSpec();
     StubbedKinesisAsyncClient kinesis = new StubbedKinesisAsyncClient(10);
     kinesis
@@ -236,9 +230,9 @@ public class EFOShardSubscribersPoolTest {
     kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(11));
 
     KinesisReaderCheckpoint initialCheckpoint =
-        new FromScratchCheckpointGenerator(config).generate(kinesis);
+        new FromScratchCheckpointGenerator(readSpec).generate(kinesis);
 
-    EFOShardSubscribersPool pool = new EFOShardSubscribersPool(config, readSpec, kinesis);
+    EFOShardSubscribersPool pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);
     Throwable exception = assertThrows(IOException.class, () -> waitForRecords(pool, 10));
     assertEquals("java.util.concurrent.CompletionException: Err ...", exception.getMessage());

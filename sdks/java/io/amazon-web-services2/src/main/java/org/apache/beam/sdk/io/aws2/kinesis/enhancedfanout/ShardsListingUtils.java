@@ -17,12 +17,17 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
+import static org.apache.beam.sdk.util.Preconditions.checkArgumentNotNull;
+
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
+import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint;
+import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
+import org.apache.beam.sdk.io.aws2.kinesis.TimeUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -42,10 +47,10 @@ public class ShardsListingUtils {
    * we need to consume all backlog from closed shards too.
    */
   static List<Shard> getShardsAfterParent(
-      String parentShardId, Config config, KinesisAsyncClient kinesis) {
+      String parentShardId, KinesisIO.Read readSpec, KinesisAsyncClient kinesis) {
     ListShardsRequest listShardsRequest =
         ListShardsRequest.builder()
-            .streamName(config.getStreamName())
+            .streamName(checkArgumentNotNull(readSpec.getStreamName()))
             .shardFilter(buildSingleShardFilter(parentShardId))
             .build();
 
@@ -53,18 +58,21 @@ public class ShardsListingUtils {
   }
 
   static List<ShardCheckpoint> generateShardsCheckpoints(
-      Config config, KinesisAsyncClient kinesis) {
+      KinesisIO.Read readSpec, KinesisAsyncClient kinesis) {
     ListShardsRequest listShardsRequest =
         ListShardsRequest.builder()
-            .streamName(config.getStreamName())
-            .shardFilter(buildFilter(config))
+            .streamName(checkArgumentNotNull(readSpec.getStreamName()))
+            .shardFilter(buildFilter(readSpec))
             .build();
 
     ListShardsResponse response = tryListingShards(listShardsRequest, kinesis);
     return response.shards().stream()
         .map(
             s ->
-                new ShardCheckpoint(config.getStreamName(), s.shardId(), config.getStartingPoint()))
+                new ShardCheckpoint(
+                    checkArgumentNotNull(readSpec.getStreamName()),
+                    s.shardId(),
+                    checkArgumentNotNull(readSpec.getInitialPosition())))
         .collect(Collectors.toList());
   }
 
@@ -84,19 +92,20 @@ public class ShardsListingUtils {
     }
   }
 
-  private static ShardFilter buildFilter(Config config) {
-    switch (config.getStartingPoint().getPosition()) {
+  private static ShardFilter buildFilter(KinesisIO.Read readSpec) {
+    StartingPoint sp = checkArgumentNotNull(readSpec.getInitialPosition());
+    switch (checkArgumentNotNull(sp.getPosition())) {
       case LATEST:
         return ShardFilter.builder().type(ShardFilterType.AT_LATEST).build();
       case AT_TIMESTAMP:
         return ShardFilter.builder()
             .type(ShardFilterType.AT_TIMESTAMP)
-            .timestamp(config.getStartTimestamp())
+            .timestamp(TimeUtil.toJava(checkArgumentNotNull(sp.getTimestamp())))
             .build();
       case TRIM_HORIZON:
         return ShardFilter.builder().type(ShardFilterType.AT_TRIM_HORIZON).build();
       default:
-        throw new IllegalStateException(String.format("Invalid config %s", config));
+        throw new IllegalStateException(String.format("Invalid config %s", readSpec));
     }
   }
 

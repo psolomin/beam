@@ -18,6 +18,7 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import java.util.List;
+import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisReaderCheckpoint;
 import org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint;
 import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
@@ -34,28 +35,28 @@ import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 class FromScratchCheckpointGenerator implements CheckpointGenerator {
 
   private static final Logger LOG = LoggerFactory.getLogger(FromScratchCheckpointGenerator.class);
-  private final Config config;
+  private final KinesisIO.Read readSpec;
 
-  FromScratchCheckpointGenerator(Config config) {
-    this.config = config;
+  FromScratchCheckpointGenerator(KinesisIO.Read readSpec) {
+    this.readSpec = readSpec;
   }
 
   @Override
   public KinesisReaderCheckpoint generate(KinesisAsyncClient kinesis)
       throws TransientKinesisException {
     List<ShardCheckpoint> streamShards =
-        ShardsListingUtils.generateShardsCheckpoints(config, kinesis);
+        ShardsListingUtils.generateShardsCheckpoints(readSpec, kinesis);
 
     LOG.info(
         "Creating a checkpoint with following shards {} at {}",
         streamShards,
-        config.getStartingPoint().getTimestamp());
+        readSpec.getInitialPosition());
     return new KinesisReaderCheckpoint(streamShards);
   }
 
   @Override
   public String toString() {
     return String.format(
-        "Checkpoint generator for %s: %s", config.getStreamName(), config.getStartingPoint());
+        "Checkpoint generator for %s: %s", readSpec.getStreamName(), readSpec.getInitialPosition());
   }
 }

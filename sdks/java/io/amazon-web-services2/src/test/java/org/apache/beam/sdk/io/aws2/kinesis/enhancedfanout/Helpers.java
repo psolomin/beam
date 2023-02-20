@@ -18,8 +18,6 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
-import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
-import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Optional;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.awssdk.services.kinesis.model.StartingPosition;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
@@ -31,17 +29,6 @@ class Helpers {
         .withStreamName("stream-01")
         .withConsumerArn("consumer-01")
         .withInitialPositionInStream(InitialPositionInStream.LATEST);
-  }
-
-  static Config createConfig() {
-    return new Config(
-        "stream-01",
-        "consumer-01",
-        new StartingPoint(InitialPositionInStream.LATEST),
-        Optional.absent(),
-        1_000L,
-        0L,
-        0L);
   }
 
   static SubscribeToShardRequest subscribeLatest(String shardId) {
