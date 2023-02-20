@@ -63,7 +63,7 @@ public class EFOShardSubscribersPoolTest {
 
     EFOShardSubscribersPool pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);
-    List<KinesisRecord> actualRecords = waitForRecords(pool, 18);
+    List<KinesisRecord> actualRecords = waitForRecords(pool, 25);
     assertEquals(18, actualRecords.size());
     kinesis.close();
     assertTrue(pool.stop());
@@ -146,7 +146,7 @@ public class EFOShardSubscribersPoolTest {
 
     EFOShardSubscribersPool pool = new EFOShardSubscribersPool(readSpec, kinesis, 1L);
     pool.start(initialCheckpoint);
-    List<KinesisRecord> actualRecords = waitForRecords(pool, 18);
+    List<KinesisRecord> actualRecords = waitForRecords(pool, 25);
     assertEquals(18, actualRecords.size());
     kinesis.close();
     assertTrue(pool.stop());
@@ -245,11 +245,11 @@ public class EFOShardSubscribersPoolTest {
     assertTrue(pool.stop());
   }
 
-  static List<KinesisRecord> waitForRecords(EFOShardSubscribersPool pool, int expectedCnt)
+  static List<KinesisRecord> waitForRecords(EFOShardSubscribersPool pool, int maxAttempts)
       throws Exception {
     List<KinesisRecord> records = new ArrayList<>();
     int i = 0;
-    while (i < expectedCnt) {
+    while (i < maxAttempts) {
       Thread.sleep(20);
       KinesisRecord r = pool.getNextRecord();
       if (r != null) {

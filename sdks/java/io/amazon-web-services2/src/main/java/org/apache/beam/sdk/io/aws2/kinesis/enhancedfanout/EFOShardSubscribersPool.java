@@ -208,12 +208,8 @@ class EFOShardSubscribersPool {
     if (current != null) {
       String shardId = current.shardId;
       ShardState shardState = Preconditions.checkStateNotNull(state.get(shardId));
-      if (current != null && current.hasNext()) {
+      if (current.hasNext()) {
         KinesisClientRecord r = current.next();
-        if (!current.hasNext()) {
-          onEventDone(shardState, current);
-          current = null;
-        }
         shardState.update(r);
         KinesisRecord kinesisRecord = new KinesisRecord(r, read.getStreamName(), shardId);
         latestRecordTimestampPolicy.update(kinesisRecord);
@@ -236,15 +232,12 @@ class EFOShardSubscribersPool {
    *
    * <p>In case of re-sharding, start all new {@link EFOShardSubscriber#subscribe subscriptions}
    * with the subscription {@link #errorHandler} if there is no {@link #subscriptionError} yet.
-   *
-   * <p>Finally, {@link EFOShardSubscriber#ackEvent() acknowledge} to the respective {@link
-   * EFOShardSubscriber} that processing of an event is complete.
    */
+  @SuppressWarnings("UnusedVariable")
   private void onEventDone(ShardState shardState, EventRecords records) {
     if (records.event.hasChildShards()) {
       LOG.info("Child shards: {} ", records.event.childShards());
     }
-    shardState.subscriber.ackEvent();
   }
 
   /** Adds a {@link EventRecords} iterator for shardId and event to {@link #eventQueue}. */
@@ -304,6 +297,7 @@ class EFOShardSubscribersPool {
     ShardState update(EventRecords eventRecords) {
       sequenceNumber = eventRecords.event.continuationSequenceNumber();
       subSequenceNumber = 0L;
+      subscriber.ackEvent();
       return this;
     }
   }
