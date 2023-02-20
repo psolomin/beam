@@ -76,6 +76,8 @@ import software.amazon.kinesis.retrieval.KinesisClientRecord;
 @SuppressWarnings({"nullness"})
 class EFOShardSubscribersPool {
   private static final Logger LOG = LoggerFactory.getLogger(EFOShardSubscribersPool.class);
+  private static final long ON_ERROR_COOL_DOWN_MS_DEFAULT = 1_000L;
+  private final long onErrorCoolDownMs;
 
   // TODO: get rid of these 2?
   private final UUID poolId;
@@ -136,6 +138,16 @@ class EFOShardSubscribersPool {
     this.config = config;
     this.read = readSpec;
     this.kinesis = kinesis;
+    this.onErrorCoolDownMs = ON_ERROR_COOL_DOWN_MS_DEFAULT;
+  }
+
+  EFOShardSubscribersPool(
+      Config config, KinesisIO.Read readSpec, KinesisAsyncClient kinesis, long onErrorCoolDownMs) {
+    this.poolId = UUID.randomUUID();
+    this.config = config;
+    this.read = readSpec;
+    this.kinesis = kinesis;
+    this.onErrorCoolDownMs = onErrorCoolDownMs;
   }
 
   /**
@@ -155,7 +167,7 @@ class EFOShardSubscribersPool {
     checkpoints.forEach(
         ch -> {
           EFOShardSubscriber subscriber =
-              new EFOShardSubscriber(this, ch.getShardId(), read, kinesis);
+              new EFOShardSubscriber(this, ch.getShardId(), read, kinesis, onErrorCoolDownMs);
           StartingPosition startingPosition = ch.toStartingPosition();
           subscriber.subscribe(startingPosition).whenCompleteAsync(errorHandler);
           ShardState shardState = new ShardState(subscriber);
