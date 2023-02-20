@@ -79,10 +79,7 @@ class EFOShardSubscribersPool {
   private static final long ON_ERROR_COOL_DOWN_MS_DEFAULT = 1_000L;
   private final long onErrorCoolDownMs;
 
-  // TODO: get rid of these 2?
   private final UUID poolId;
-  private final Config config;
-
   private final KinesisIO.Read read;
   private final KinesisAsyncClient kinesis;
 
@@ -133,18 +130,16 @@ class EFOShardSubscribersPool {
   private final WatermarkPolicy latestRecordTimestampPolicy =
       WatermarkPolicyFactory.withArrivalTimePolicy().createWatermarkPolicy();
 
-  EFOShardSubscribersPool(Config config, KinesisIO.Read readSpec, KinesisAsyncClient kinesis) {
+  EFOShardSubscribersPool(KinesisIO.Read readSpec, KinesisAsyncClient kinesis) {
     this.poolId = UUID.randomUUID();
-    this.config = config;
     this.read = readSpec;
     this.kinesis = kinesis;
     this.onErrorCoolDownMs = ON_ERROR_COOL_DOWN_MS_DEFAULT;
   }
 
   EFOShardSubscribersPool(
-      Config config, KinesisIO.Read readSpec, KinesisAsyncClient kinesis, long onErrorCoolDownMs) {
+      KinesisIO.Read readSpec, KinesisAsyncClient kinesis, long onErrorCoolDownMs) {
     this.poolId = UUID.randomUUID();
-    this.config = config;
     this.read = readSpec;
     this.kinesis = kinesis;
     this.onErrorCoolDownMs = onErrorCoolDownMs;
@@ -161,8 +156,8 @@ class EFOShardSubscribersPool {
     LOG.info(
         "Starting pool {} {} {}. Checkpoints = {}",
         poolId,
-        config.getStreamName(),
-        config.getConsumerArn(),
+        read.getStreamName(),
+        read.getConsumerArn(),
         checkpoints);
     checkpoints.forEach(
         ch -> {
@@ -220,7 +215,7 @@ class EFOShardSubscribersPool {
           current = null;
         }
         shardState.update(r);
-        KinesisRecord kinesisRecord = new KinesisRecord(r, config.getStreamName(), shardId);
+        KinesisRecord kinesisRecord = new KinesisRecord(r, read.getStreamName(), shardId);
         latestRecordTimestampPolicy.update(kinesisRecord);
         return kinesisRecord;
       } else {
@@ -254,7 +249,7 @@ class EFOShardSubscribersPool {
 
   /** Adds a {@link EventRecords} iterator for shardId and event to {@link #eventQueue}. */
   void enqueueEvent(String shardId, SubscribeToShardEvent event) {
-    eventQueue.offer(new EventRecords(config.getStreamName(), shardId, event));
+    eventQueue.offer(new EventRecords(read.getStreamName(), shardId, event));
   }
 
   public Instant getWatermark() {

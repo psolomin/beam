@@ -39,7 +39,6 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
   private static final Logger LOG = LoggerFactory.getLogger(KinesisEnhancedFanOutReader.class);
 
   private final KinesisIO.Read spec;
-  private final Config config;
   private final KinesisAsyncClient kinesis;
   private final KinesisEnhancedFanOutSource source;
   private final CheckpointGenerator checkpointGenerator;
@@ -56,7 +55,6 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
     this.kinesis = checkArgumentNotNull(kinesis);
     this.checkpointGenerator = checkArgumentNotNull(checkpointGenerator);
     this.source = source;
-    this.config = Config.fromIOSpec(spec);
   }
 
   @Override
@@ -126,7 +124,7 @@ public class KinesisEnhancedFanOutReader extends UnboundedSource.UnboundedReader
   }
 
   private EFOShardSubscribersPool createPool() throws TransientKinesisException {
-    return new EFOShardSubscribersPool(config, spec, kinesis);
+    return new EFOShardSubscribersPool(spec, kinesis);
   }
 
   private KinesisRecord getOrThrow() throws NoSuchElementException {

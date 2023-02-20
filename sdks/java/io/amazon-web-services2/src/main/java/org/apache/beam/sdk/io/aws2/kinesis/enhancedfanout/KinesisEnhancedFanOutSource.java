@@ -43,7 +43,7 @@ public class KinesisEnhancedFanOutSource
   private final ClientBuilderFactory builderFactory;
 
   public KinesisEnhancedFanOutSource(KinesisIO.Read readSpec, ClientBuilderFactory builderFactory) {
-    this(readSpec, builderFactory, new FromScratchCheckpointGenerator(Config.fromIOSpec(readSpec)));
+    this(readSpec, builderFactory, new FromScratchCheckpointGenerator(readSpec));
   }
 
   private KinesisEnhancedFanOutSource(
