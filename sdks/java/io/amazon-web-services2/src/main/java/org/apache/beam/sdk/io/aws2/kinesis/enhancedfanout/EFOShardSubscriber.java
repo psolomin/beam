@@ -58,7 +58,7 @@ class EFOShardSubscriber {
 
   /**
    * Completes once this shard subscriber is done, either normally (stopped or shard is completely
-   * consumed) or exceptionally due to a non retryable error.
+   * consumed) or exceptionally due to a non retry-able error.
    */
   private final CompletableFuture<Void> done = new CompletableFuture<>();
 
@@ -81,8 +81,6 @@ class EFOShardSubscriber {
    * <li>or otherwise re-subscribes at {@link ShardEventsSubscriber#sequenceNumber}.
    */
   private final BiConsumer<Void, Throwable> reSubscriptionHandler;
-
-  private static final Long ON_ERROR_COOL_DOWN_MS = 5_000L;
 
   /**
    * TODO: add 2 other retry-able cases.
@@ -127,7 +125,8 @@ class EFOShardSubscriber {
       EFOShardSubscribersPool pool,
       String shardId,
       KinesisIO.Read read,
-      KinesisAsyncClient kinesis) {
+      KinesisAsyncClient kinesis,
+      long onErrorCoolDownMs) {
     this.pool = pool;
     this.consumerArn = checkArgumentNotNull(read.getConsumerArn());
     this.shardId = shardId;
@@ -142,7 +141,7 @@ class EFOShardSubscriber {
             if (lastContinuationSequenceNumber == null) {
               done.complete(null); // completely consumed this shard, done
             } else {
-              Long delay = (error != null) ? ON_ERROR_COOL_DOWN_MS : 0L;
+              Long delay = (error != null) ? onErrorCoolDownMs : 0L;
               pool.delayedTask(
                   () ->
                       subscribe(

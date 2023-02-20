@@ -23,15 +23,22 @@ import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.Helpers.createR
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.RecordsGenerators.eventWithOutRecords;
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.RecordsGenerators.eventWithRecords;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
+import io.netty.handler.timeout.ReadTimeoutException;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletionException;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisReaderCheckpoint;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 import org.junit.Test;
+import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 
@@ -114,6 +121,134 @@ public class EFOShardSubscribersPoolTest {
             Helpers.subscribeAfterSeqNumber("shard-000", "32"),
             Helpers.subscribeAfterSeqNumber("shard-001", "9"));
     assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
+  }
+
+  @Test
+  public void poolReSubscribesWhenRecoverableErrorOccurs() throws Exception {
+    Config config = createConfig();
+    KinesisIO.Read readSpec = createReadSpec();
+    StubbedKinesisAsyncClient kinesis = new StubbedKinesisAsyncClient(10);
+    kinesis
+        .stubSubscribeToShard("shard-000", eventWithRecords(3))
+        .failWith(new ReadTimeoutException());
+
+    kinesis.stubSubscribeToShard("shard-000", eventWithRecords(3, 7));
+    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(10));
+    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(11));
+    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(12));
+
+    kinesis.stubSubscribeToShard("shard-001", eventWithRecords(3));
+    kinesis
+        .stubSubscribeToShard("shard-001", eventWithRecords(3, 5))
+        .failWith(SdkClientException.create("this is recoverable", new ReadTimeoutException()));
+    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(8));
+    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(9));
+    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(11));
+
+    KinesisReaderCheckpoint initialCheckpoint =
+        new FromScratchCheckpointGenerator(config).generate(kinesis);
+
+    EFOShardSubscribersPool pool = new EFOShardSubscribersPool(config, readSpec, kinesis, 1L);
+    pool.start(initialCheckpoint);
+    List<KinesisRecord> actualRecords = waitForRecords(pool, 18);
+    assertEquals(18, actualRecords.size());
+    kinesis.close();
+    assertTrue(pool.stop());
+
+    List<SubscribeToShardRequest> expectedSubscribeRequests =
+        ImmutableList.of(
+            Helpers.subscribeLatest("shard-000"),
+            Helpers.subscribeLatest("shard-001"),
+            Helpers.subscribeAfterSeqNumber("shard-000", "2"),
+            Helpers.subscribeAfterSeqNumber("shard-001", "2"),
+            Helpers.subscribeAfterSeqNumber("shard-000", "9"),
+            Helpers.subscribeAfterSeqNumber("shard-001", "7"));
+    List<ShardCheckpoint> expectedCheckPoint =
+        ImmutableList.of(
+            new ShardCheckpoint(
+                "stream-01", "shard-001", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "7", 0L),
+            new ShardCheckpoint(
+                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "9", 0L));
+    KinesisReaderCheckpoint actualCheckPoint = pool.getCheckpointMark();
+    assertEquals(expectedCheckPoint, ImmutableList.copyOf(actualCheckPoint.iterator()));
+    assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
+  }
+
+  @Test
+  public void poolFailsWhenNonRecoverableErrorOccurs() throws Exception {
+    Config config = createConfig();
+    KinesisIO.Read readSpec = createReadSpec();
+    StubbedKinesisAsyncClient kinesis = new StubbedKinesisAsyncClient(10);
+    kinesis
+        .stubSubscribeToShard("shard-000", eventWithRecords(3))
+        .failWith(new RuntimeException("Oh..."));
+
+    kinesis.stubSubscribeToShard("shard-000", eventWithRecords(3, 7));
+    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(10));
+    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(11));
+    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(12));
+
+    kinesis.stubSubscribeToShard("shard-001", eventWithRecords(3));
+    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(8));
+    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(9));
+    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(11));
+
+    KinesisReaderCheckpoint initialCheckpoint =
+        new FromScratchCheckpointGenerator(config).generate(kinesis);
+
+    EFOShardSubscribersPool pool = new EFOShardSubscribersPool(config, readSpec, kinesis);
+    pool.start(initialCheckpoint);
+    Throwable exception = assertThrows(IOException.class, () -> waitForRecords(pool, 10));
+    assertEquals("java.lang.RuntimeException: Oh...", exception.getMessage());
+    assertTrue(exception.getCause() instanceof RuntimeException);
+    kinesis.close();
+    assertTrue(pool.stop());
+  }
+
+  @Test
+  public void poolFailsWhenConsumerDoesNotExist() throws Exception {
+    Config config = createConfig();
+    KinesisIO.Read readSpec = createReadSpec();
+    StubbedKinesisAsyncClient kinesis = new StubbedKinesisAsyncClient(10);
+    kinesis
+        .stubSubscribeToShard("shard-000", eventWithRecords(3))
+        .failWith(
+            new CompletionException(
+                "Err ...",
+                ResourceNotFoundException.builder()
+                    .cause(null)
+                    .awsErrorDetails(
+                        AwsErrorDetails.builder()
+                            .serviceName("Kinesis")
+                            .errorCode("ResourceNotFoundException")
+                            .errorMessage("Consumer consumer-01 not found.")
+                            .build())
+                    .build()));
+
+    kinesis.stubSubscribeToShard("shard-000", eventWithRecords(3, 7));
+    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(10));
+    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(11));
+    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(12));
+
+    kinesis.stubSubscribeToShard("shard-001", eventWithRecords(3));
+    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(8));
+    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(9));
+    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(11));
+
+    KinesisReaderCheckpoint initialCheckpoint =
+        new FromScratchCheckpointGenerator(config).generate(kinesis);
+
+    EFOShardSubscribersPool pool = new EFOShardSubscribersPool(config, readSpec, kinesis);
+    pool.start(initialCheckpoint);
+    Throwable exception = assertThrows(IOException.class, () -> waitForRecords(pool, 10));
+    assertEquals("java.util.concurrent.CompletionException: Err ...", exception.getMessage());
+    Throwable cause = exception.getCause().getCause();
+    assertTrue(cause instanceof ResourceNotFoundException);
+    assertEquals(
+        "Consumer consumer-01 not found. (Service: Kinesis, Status Code: 0, Request ID: null)",
+        cause.getMessage());
+    kinesis.close();
+    assertTrue(pool.stop());
   }
 
   static List<KinesisRecord> waitForRecords(EFOShardSubscribersPool pool, int expectedCnt)
