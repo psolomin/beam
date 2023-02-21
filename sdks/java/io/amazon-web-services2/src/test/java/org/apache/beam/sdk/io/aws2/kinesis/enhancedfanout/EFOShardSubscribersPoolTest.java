@@ -79,9 +79,9 @@ public class EFOShardSubscribersPoolTest {
     List<ShardCheckpoint> expectedCheckPoint =
         ImmutableList.of(
             new ShardCheckpoint(
-                "stream-01", "shard-001", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "7", 0L),
+                "stream-01", "shard-001", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "9", 0L),
             new ShardCheckpoint(
-                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "9", 0L));
+                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "10", 0L));
     KinesisReaderCheckpoint actualCheckPoint = pool.getCheckpointMark();
     assertEquals(expectedCheckPoint, ImmutableList.copyOf(actualCheckPoint.iterator()));
     assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
@@ -162,9 +162,9 @@ public class EFOShardSubscribersPoolTest {
     List<ShardCheckpoint> expectedCheckPoint =
         ImmutableList.of(
             new ShardCheckpoint(
-                "stream-01", "shard-001", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "7", 0L),
+                "stream-01", "shard-001", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "8", 0L),
             new ShardCheckpoint(
-                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "9", 0L));
+                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "11", 0L));
     KinesisReaderCheckpoint actualCheckPoint = pool.getCheckpointMark();
     assertEquals(expectedCheckPoint, ImmutableList.copyOf(actualCheckPoint.iterator()));
     assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));

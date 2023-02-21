@@ -134,6 +134,7 @@ class EFOShardSubscriber {
     this.inFlight = new AtomicInteger();
     this.reSubscriptionHandler =
         (Void unused, Throwable error) -> {
+          eventsSubscriber.cancel();
           if (error != null && !isRetryAble(error)) {
             done.completeExceptionally(error);
           } else if (!isStopped) {
@@ -176,7 +177,7 @@ class EFOShardSubscriber {
     try {
       kinesis.subscribeToShard(request, responseHandler()).whenComplete(reSubscriptionHandler);
       return done;
-    } catch (RuntimeException e) {
+    } catch (Exception e) {
       done.completeExceptionally(e);
       return done;
     }
@@ -211,7 +212,7 @@ class EFOShardSubscriber {
    * {@link ShardEventsSubscriber#subscription} (if active).
    */
   void ackEvent() {
-    if (inFlight.getAndDecrement() == IN_FLIGHT_LIMIT) {
+    if (inFlight.getAndDecrement() <= IN_FLIGHT_LIMIT) {
       Subscription s = eventsSubscriber.subscription;
       if (s != null) {
         s.request(1);
@@ -242,7 +243,7 @@ class EFOShardSubscriber {
      */
     @Override
     public void onSubscribe(Subscription subscription) {
-      if (inFlight.incrementAndGet() < IN_FLIGHT_LIMIT && subscription != null) {
+      if (subscription != null) {
         subscription.request(1);
       }
       this.subscription = subscription;
@@ -276,7 +277,8 @@ class EFOShardSubscriber {
 
     @Override
     public void onError(Throwable t) {
-      // nothing to do here, handled in {@link #resubscriptionHandler}
+      // nothing to do here, handled in {@link #reSubscriptionHandler}
+      LOG.warn("Pool id = {} shard id = {} subscriber got error", pool.getPoolId(), shardId, t);
     }
 
     /** Unsets {@link #eventsSubscriber} of {@link EFOShardSubscriber}. */
