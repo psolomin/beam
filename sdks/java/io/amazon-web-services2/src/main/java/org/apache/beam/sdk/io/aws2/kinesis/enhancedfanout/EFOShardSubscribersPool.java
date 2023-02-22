@@ -259,9 +259,9 @@ class EFOShardSubscribersPool {
                   subscriber.subscribe(startingPosition).whenCompleteAsync(errorHandler);
                   return new ShardState(subscriber);
                 });
-            shardState.subscriber.cancel();
-            state.remove(noRecordsEvent.shardId);
           });
+      shardState.subscriber.cancel();
+      state.remove(noRecordsEvent.shardId);
     } else {
       shardState.update(noRecordsEvent);
     }
