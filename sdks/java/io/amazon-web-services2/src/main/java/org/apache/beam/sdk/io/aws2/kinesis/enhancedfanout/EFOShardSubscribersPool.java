@@ -80,6 +80,7 @@ import software.amazon.kinesis.retrieval.KinesisClientRecord;
 @SuppressWarnings({"nullness"})
 class EFOShardSubscribersPool {
   private static final Logger LOG = LoggerFactory.getLogger(EFOShardSubscribersPool.class);
+  private static final long SCHEDULER_SHUTDOWN_TIMEOUT_MS = 1_000L;
   private static final long ON_ERROR_COOL_DOWN_MS_DEFAULT = 1_000L;
   private final long onErrorCoolDownMs;
 
@@ -309,6 +310,8 @@ class EFOShardSubscribersPool {
         state.entrySet().stream()
             .map(
                 entry -> {
+                  // FIXME: this must take into account initial checkpoint the pool was started with
+                  // Example - with specific timestamp
                   if (entry.getValue().sequenceNumber == null) {
                     return new ShardCheckpoint(
                         read.getStreamName(),
@@ -328,10 +331,10 @@ class EFOShardSubscribersPool {
     return new KinesisReaderCheckpoint(checkpoints);
   }
 
-  // TODO:
   public boolean stop() throws InterruptedException {
     state.forEach((shardId, st) -> st.subscriber.cancel());
-    return true;
+    scheduler.shutdown();
+    return scheduler.awaitTermination(SCHEDULER_SHUTDOWN_TIMEOUT_MS, MILLISECONDS);
   }
 
   /**
