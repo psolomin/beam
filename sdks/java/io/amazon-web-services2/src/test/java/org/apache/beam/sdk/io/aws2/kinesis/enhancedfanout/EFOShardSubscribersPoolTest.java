@@ -148,7 +148,7 @@ public class EFOShardSubscribersPoolTest {
     KinesisReaderCheckpoint initialCheckpoint =
         new FromScratchCheckpointGenerator(readSpec).generate(kinesis);
 
-    EFOShardSubscribersPool pool = new EFOShardSubscribersPool(readSpec, kinesis, 1L);
+    EFOShardSubscribersPool pool = new EFOShardSubscribersPool(readSpec, kinesis, 1);
     pool.start(initialCheckpoint);
     List<KinesisRecord> actualRecords = waitForRecords(pool, 25);
     assertEquals(18, actualRecords.size());
