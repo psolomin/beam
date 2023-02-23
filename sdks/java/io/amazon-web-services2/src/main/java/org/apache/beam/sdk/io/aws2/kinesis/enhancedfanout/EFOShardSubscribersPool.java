@@ -261,7 +261,6 @@ class EFOShardSubscribersPool {
                   return new ShardState(subscriber);
                 });
           });
-      shardState.subscriber.cancel();
       state.remove(noRecordsEvent.shardId);
     } else {
       shardState.update(noRecordsEvent);
@@ -332,6 +331,7 @@ class EFOShardSubscribersPool {
   }
 
   public boolean stop() throws InterruptedException {
+    LOG.info("Stopping pool {}", poolId);
     state.forEach((shardId, st) -> st.subscriber.cancel());
     scheduler.shutdown();
     return scheduler.awaitTermination(SCHEDULER_SHUTDOWN_TIMEOUT_MS, MILLISECONDS);
