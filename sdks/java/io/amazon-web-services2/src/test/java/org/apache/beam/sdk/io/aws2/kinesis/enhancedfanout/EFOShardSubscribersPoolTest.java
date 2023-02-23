@@ -40,6 +40,7 @@ import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 
 public class EFOShardSubscribersPoolTest {
@@ -50,15 +51,11 @@ public class EFOShardSubscribersPoolTest {
         new StubbedKinesisAsyncClient(10, ImmutableList.of("shard-000", "shard-001"));
     kinesis.stubSubscribeToShard("shard-000", eventWithRecords(3));
     kinesis.stubSubscribeToShard("shard-000", eventWithRecords(3, 7));
-    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(10));
-    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(11));
-    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(12));
+    addNoRecordsEvents(kinesis, "shard-000", 3, 10);
 
     kinesis.stubSubscribeToShard("shard-001", eventWithRecords(3));
     kinesis.stubSubscribeToShard("shard-001", eventWithRecords(3, 5));
-    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(8));
-    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(9));
-    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(11));
+    addNoRecordsEvents(kinesis, "shard-001", 3, 8);
 
     KinesisReaderCheckpoint initialCheckpoint =
         new FromScratchCheckpointGenerator(readSpec).generate(kinesis);
@@ -78,6 +75,8 @@ public class EFOShardSubscribersPoolTest {
             Helpers.subscribeAfterSeqNumber("shard-001", "2"),
             Helpers.subscribeAfterSeqNumber("shard-000", "9"),
             Helpers.subscribeAfterSeqNumber("shard-001", "7"));
+    assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
+
     List<ShardCheckpoint> expectedCheckPoint =
         ImmutableList.of(
             new ShardCheckpoint(
@@ -86,7 +85,6 @@ public class EFOShardSubscribersPoolTest {
                 "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "11", 0L));
     KinesisReaderCheckpoint actualCheckPoint = pool.getCheckpointMark();
     assertEquals(expectedCheckPoint, ImmutableList.copyOf(actualCheckPoint.iterator()));
-    assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
   }
 
   @Test
@@ -94,13 +92,8 @@ public class EFOShardSubscribersPoolTest {
     KinesisIO.Read readSpec = createReadSpec();
     StubbedKinesisAsyncClient kinesis =
         new StubbedKinesisAsyncClient(10, ImmutableList.of("shard-000", "shard-001"));
-    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(31));
-    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(32));
-    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(33));
-
-    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(8));
-    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(9));
-    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(11));
+    addNoRecordsEvents(kinesis, "shard-000", 3, 31);
+    addNoRecordsEvents(kinesis, "shard-001", 3, 8);
 
     KinesisReaderCheckpoint initialCheckpoint =
         new FromScratchCheckpointGenerator(readSpec).generate(kinesis);
@@ -116,11 +109,18 @@ public class EFOShardSubscribersPoolTest {
         ImmutableList.of(
             Helpers.subscribeLatest("shard-000"),
             Helpers.subscribeLatest("shard-001"),
-            Helpers.subscribeAfterSeqNumber("shard-000", "31"),
-            Helpers.subscribeAfterSeqNumber("shard-001", "8"),
-            Helpers.subscribeAfterSeqNumber("shard-000", "32"),
-            Helpers.subscribeAfterSeqNumber("shard-001", "9"));
+            Helpers.subscribeAfterSeqNumber("shard-000", "33"),
+            Helpers.subscribeAfterSeqNumber("shard-001", "10"));
     assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
+
+    List<ShardCheckpoint> expectedCheckPoint =
+        ImmutableList.of(
+            new ShardCheckpoint(
+                "stream-01", "shard-001", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "10", 0L),
+            new ShardCheckpoint(
+                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "33", 0L));
+    KinesisReaderCheckpoint actualCheckPoint = pool.getCheckpointMark();
+    assertEquals(expectedCheckPoint, ImmutableList.copyOf(actualCheckPoint.iterator()));
   }
 
   @Test
@@ -133,17 +133,13 @@ public class EFOShardSubscribersPoolTest {
         .failWith(new ReadTimeoutException());
 
     kinesis.stubSubscribeToShard("shard-000", eventWithRecords(3, 7));
-    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(10));
-    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(11));
-    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(12));
+    addNoRecordsEvents(kinesis, "shard-000", 3, 10);
 
     kinesis.stubSubscribeToShard("shard-001", eventWithRecords(3));
     kinesis
         .stubSubscribeToShard("shard-001", eventWithRecords(3, 5))
         .failWith(SdkClientException.create("this is recoverable", new ReadTimeoutException()));
-    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(8));
-    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(9));
-    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(11));
+    addNoRecordsEvents(kinesis, "shard-001", 3, 8);
 
     KinesisReaderCheckpoint initialCheckpoint =
         new FromScratchCheckpointGenerator(readSpec).generate(kinesis);
@@ -163,6 +159,8 @@ public class EFOShardSubscribersPoolTest {
             Helpers.subscribeAfterSeqNumber("shard-001", "2"),
             Helpers.subscribeAfterSeqNumber("shard-000", "9"),
             Helpers.subscribeAfterSeqNumber("shard-001", "7"));
+    assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
+
     List<ShardCheckpoint> expectedCheckPoint =
         ImmutableList.of(
             new ShardCheckpoint(
@@ -171,7 +169,6 @@ public class EFOShardSubscribersPoolTest {
                 "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "11", 0L));
     KinesisReaderCheckpoint actualCheckPoint = pool.getCheckpointMark();
     assertEquals(expectedCheckPoint, ImmutableList.copyOf(actualCheckPoint.iterator()));
-    assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
   }
 
   @Test
@@ -179,30 +176,37 @@ public class EFOShardSubscribersPoolTest {
     KinesisIO.Read readSpec = createReadSpec();
     StubbedKinesisAsyncClient kinesis =
         new StubbedKinesisAsyncClient(10, ImmutableList.of("shard-000", "shard-001"));
+    kinesis.stubSubscribeToShard("shard-000", eventWithRecords(7));
+
     kinesis
-        .stubSubscribeToShard("shard-000", eventWithRecords(3))
+        .stubSubscribeToShard("shard-000", eventWithRecords(7, 3))
         .failWith(new RuntimeException("Oh..."));
 
-    kinesis.stubSubscribeToShard("shard-000", eventWithRecords(3, 7));
-    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(10));
-    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(11));
-    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(12));
+    addNoRecordsEvents(kinesis, "shard-000", 3, 10);
 
     kinesis.stubSubscribeToShard("shard-001", eventWithRecords(3));
-    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(8));
-    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(9));
-    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(11));
+    addNoRecordsEvents(kinesis, "shard-001", 3, 8);
 
     KinesisReaderCheckpoint initialCheckpoint =
         new FromScratchCheckpointGenerator(readSpec).generate(kinesis);
 
     EFOShardSubscribersPool pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);
-    Throwable exception = assertThrows(IOException.class, () -> waitForRecords(pool, 10));
+    Throwable exception = assertThrows(IOException.class, () -> waitForRecords(pool, 20));
     assertEquals("java.lang.RuntimeException: Oh...", exception.getMessage());
     assertTrue(exception.getCause() instanceof RuntimeException);
     kinesis.close();
     assertTrue(pool.stop());
+
+    // consumer will still get some records and advance checkpoint
+    List<ShardCheckpoint> expectedCheckPoint =
+        ImmutableList.of(
+            new ShardCheckpoint(
+                "stream-01", "shard-001", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "9", 0L),
+            new ShardCheckpoint(
+                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "9", 0L));
+    KinesisReaderCheckpoint actualCheckPoint = pool.getCheckpointMark();
+    assertEquals(expectedCheckPoint, ImmutableList.copyOf(actualCheckPoint.iterator()));
   }
 
   @Test
@@ -226,14 +230,10 @@ public class EFOShardSubscribersPoolTest {
                     .build()));
 
     kinesis.stubSubscribeToShard("shard-000", eventWithRecords(3, 7));
-    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(10));
-    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(11));
-    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(12));
+    addNoRecordsEvents(kinesis, "shard-000", 3, 10);
 
     kinesis.stubSubscribeToShard("shard-001", eventWithRecords(3));
-    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(8));
-    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(9));
-    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(11));
+    addNoRecordsEvents(kinesis, "shard-000", 3, 8);
 
     KinesisReaderCheckpoint initialCheckpoint =
         new FromScratchCheckpointGenerator(readSpec).generate(kinesis);
@@ -258,28 +258,24 @@ public class EFOShardSubscribersPoolTest {
         new StubbedKinesisAsyncClient(10, ImmutableList.of("shard-000", "shard-001"));
     kinesis.stubSubscribeToShard("shard-000", eventWithRecords(3));
     kinesis.stubSubscribeToShard("shard-000", eventWithRecords(3, 7));
-    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(10));
+    addNoRecordsEvents(kinesis, "shard-000", 1, 10);
     kinesis.stubSubscribeToShard(
         "shard-000",
         shardUpEvent(ImmutableList.of("shard-000"), ImmutableList.of("shard-002", "shard-003")));
     kinesis.stubSubscribeToShard("shard-002", eventWithRecords(5));
-    kinesis.stubSubscribeToShard("shard-002", eventWithOutRecords(5));
-    kinesis.stubSubscribeToShard("shard-002", eventWithOutRecords(6));
-    kinesis.stubSubscribeToShard("shard-002", eventWithOutRecords(7));
+    addNoRecordsEvents(kinesis, "shard-002", 3, 5);
+
     kinesis.stubSubscribeToShard("shard-003", eventWithRecords(6));
-    kinesis.stubSubscribeToShard("shard-003", eventWithOutRecords(6));
-    kinesis.stubSubscribeToShard("shard-003", eventWithOutRecords(7));
-    kinesis.stubSubscribeToShard("shard-003", eventWithOutRecords(8));
+    addNoRecordsEvents(kinesis, "shard-003", 3, 6);
 
     kinesis.stubSubscribeToShard("shard-001", eventWithRecords(3));
     kinesis.stubSubscribeToShard("shard-001", eventWithRecords(3, 5));
-    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(8));
+    addNoRecordsEvents(kinesis, "shard-001", 1, 8);
     kinesis.stubSubscribeToShard(
         "shard-001", shardUpEvent(ImmutableList.of("shard-001"), ImmutableList.of("shard-004")));
 
     kinesis.stubSubscribeToShard("shard-004", eventWithRecords(5));
-    kinesis.stubSubscribeToShard("shard-004", eventWithOutRecords(5));
-    kinesis.stubSubscribeToShard("shard-004", eventWithOutRecords(6));
+    addNoRecordsEvents(kinesis, "shard-004", 2, 5);
 
     KinesisReaderCheckpoint initialCheckpoint =
         new FromScratchCheckpointGenerator(readSpec).generate(kinesis);
@@ -322,42 +318,37 @@ public class EFOShardSubscribersPoolTest {
     StubbedKinesisAsyncClient kinesis =
         new StubbedKinesisAsyncClient(
             10, ImmutableList.of("shard-000", "shard-001", "shard-002", "shard-003"));
+
     kinesis.stubSubscribeToShard("shard-000", eventWithRecords(3));
     kinesis.stubSubscribeToShard("shard-000", eventWithRecords(3, 7));
-    kinesis.stubSubscribeToShard("shard-000", eventWithOutRecords(10));
+    addNoRecordsEvents(kinesis, "shard-000", 1, 10);
     kinesis.stubSubscribeToShard(
         "shard-000",
         shardUpEvent(ImmutableList.of("shard-000", "shard-001"), ImmutableList.of("shard-004")));
+
     kinesis.stubSubscribeToShard("shard-001", eventWithRecords(5));
-    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(5));
-    kinesis.stubSubscribeToShard("shard-001", eventWithOutRecords(6));
+    addNoRecordsEvents(kinesis, "shard-001", 2, 5);
     kinesis.stubSubscribeToShard(
         "shard-001",
         shardUpEvent(ImmutableList.of("shard-000", "shard-001"), ImmutableList.of("shard-004")));
 
     kinesis.stubSubscribeToShard("shard-002", eventWithRecords(5));
-    kinesis.stubSubscribeToShard("shard-002", eventWithOutRecords(5));
-    kinesis.stubSubscribeToShard("shard-002", eventWithOutRecords(6));
+    addNoRecordsEvents(kinesis, "shard-002", 2, 5);
     kinesis.stubSubscribeToShard(
         "shard-002",
         shardUpEvent(ImmutableList.of("shard-002", "shard-003"), ImmutableList.of("shard-005")));
 
     kinesis.stubSubscribeToShard("shard-003", eventWithRecords(5));
-    kinesis.stubSubscribeToShard("shard-003", eventWithOutRecords(5));
-    kinesis.stubSubscribeToShard("shard-003", eventWithOutRecords(6));
+    addNoRecordsEvents(kinesis, "shard-003", 2, 5);
     kinesis.stubSubscribeToShard(
         "shard-003",
         shardUpEvent(ImmutableList.of("shard-002", "shard-003"), ImmutableList.of("shard-005")));
 
     kinesis.stubSubscribeToShard("shard-004", eventWithRecords(6));
-    kinesis.stubSubscribeToShard("shard-004", eventWithOutRecords(6));
-    kinesis.stubSubscribeToShard("shard-004", eventWithOutRecords(7));
-    kinesis.stubSubscribeToShard("shard-004", eventWithOutRecords(8));
+    addNoRecordsEvents(kinesis, "shard-004", 3, 6);
 
     kinesis.stubSubscribeToShard("shard-005", eventWithRecords(6));
-    kinesis.stubSubscribeToShard("shard-005", eventWithOutRecords(6));
-    kinesis.stubSubscribeToShard("shard-005", eventWithOutRecords(7));
-    kinesis.stubSubscribeToShard("shard-005", eventWithOutRecords(8));
+    addNoRecordsEvents(kinesis, "shard-005", 3, 6);
 
     KinesisReaderCheckpoint initialCheckpoint =
         new FromScratchCheckpointGenerator(readSpec).generate(kinesis);
@@ -387,6 +378,17 @@ public class EFOShardSubscribersPoolTest {
                 "stream-01", "shard-004", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "8", 0L));
     KinesisReaderCheckpoint actualCheckPoint = pool.getCheckpointMark();
     assertEquals(expectedCheckPoint, ImmutableList.copyOf(actualCheckPoint.iterator()));
+  }
+
+  static void addNoRecordsEvents(
+      StubbedKinesisAsyncClient kinesis, String shardId, int numEvent, int startingSeqNum) {
+    List<SubscribeToShardEvent> events = new ArrayList<>();
+    for (int i = 0; i < numEvent; i++) {
+      events.add(eventWithOutRecords(startingSeqNum));
+      startingSeqNum++;
+    }
+    SubscribeToShardEvent[] arr = events.toArray(new SubscribeToShardEvent[numEvent]);
+    kinesis.stubSubscribeToShard(shardId, arr);
   }
 
   static List<KinesisRecord> waitForRecords(EFOShardSubscribersPool pool, int maxAttempts)
