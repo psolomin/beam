@@ -35,6 +35,7 @@ import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisReaderCheckpoint;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint;
+import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 import org.junit.After;
 import org.junit.Before;
@@ -155,6 +156,7 @@ public class EFOShardSubscribersPoolTest {
 
     assertThat(waitForRecords(pool, 18)).hasSize(18);
 
+    // FIXME: flaky test
     assertThat(kinesis.subscribeRequestsSeen())
         .containsExactlyInAnyOrder(
             Helpers.subscribeLatest("shard-000"),
@@ -370,6 +372,19 @@ public class EFOShardSubscribersPoolTest {
                 "stream-01", "shard-005", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "8", 0L),
             new ShardCheckpoint(
                 "stream-01", "shard-004", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "8", 0L));
+  }
+
+  @Test
+  public void checkpointEqualsToInitStateIfNothingIsConsumed() throws TransientKinesisException {
+    kinesis = new StubbedKinesisAsyncClient(10, ImmutableList.of("shard-000", "shard-001"));
+    kinesis.stubSubscribeToShard("shard-000", eventWithRecords(1));
+    kinesis.stubSubscribeToShard("shard-001", eventWithRecords(1));
+    KinesisReaderCheckpoint initialCheckpoint =
+        new FromScratchCheckpointGenerator(readSpec).generate(kinesis);
+
+    pool = new EFOShardSubscribersPool(readSpec, kinesis);
+    pool.start(initialCheckpoint);
+    assertThat(pool.getCheckpointMark().iterator()).containsAll(initialCheckpoint);
   }
 
   // FIXME pls use consistent style when stubbing

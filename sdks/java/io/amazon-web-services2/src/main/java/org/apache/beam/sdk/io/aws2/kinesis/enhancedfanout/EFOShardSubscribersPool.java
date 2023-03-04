@@ -35,7 +35,6 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisReaderCheckpoint;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
@@ -170,13 +169,14 @@ class EFOShardSubscribersPool {
         read.getStreamName(),
         read.getConsumerArn(),
         checkpoints);
-    // FIXME pls use for loop
-    checkpoints.forEach(
-        ch -> {
-          checkState(!state.containsKey(ch.getShardId()), "Duplicate shard id %s", ch.getShardId());
-          ShardState shardState = new ShardState(initShardSubscriber(ch));
-          state.put(ch.getShardId(), shardState);
-        });
+    for (ShardCheckpoint shardCheckpoint : checkpoints) {
+      checkState(
+          !state.containsKey(shardCheckpoint.getShardId()),
+          "Duplicate shard id %s",
+          shardCheckpoint.getShardId());
+      ShardState shardState = new ShardState(initShardSubscriber(shardCheckpoint), shardCheckpoint);
+      state.put(shardCheckpoint.getShardId(), shardState);
+    }
   }
 
   /**
@@ -257,14 +257,15 @@ class EFOShardSubscribersPool {
       LOG.info("Processing re-shard signal {}", noRecordsEvent.event);
       List<String> successorShardsIds = computeSuccessorShardsIds(noRecordsEvent);
       for (String successorShardId : successorShardsIds) {
-            ShardCheckpoint newCheckpoint =
-                new ShardCheckpoint(
-                    read.getStreamName(),
-                    successorShardId,
-                    new StartingPoint(InitialPositionInStream.TRIM_HORIZON));
-            state.computeIfAbsent(
-                successorShardId, id -> new ShardState(initShardSubscriber(newCheckpoint)));
-          }
+        ShardCheckpoint newCheckpoint =
+            new ShardCheckpoint(
+                read.getStreamName(),
+                successorShardId,
+                new StartingPoint(InitialPositionInStream.TRIM_HORIZON));
+        state.computeIfAbsent(
+            successorShardId,
+            id -> new ShardState(initShardSubscriber(newCheckpoint), newCheckpoint));
+      }
 
       state.remove(noRecordsEvent.shardId);
     } else {
@@ -318,36 +319,19 @@ class EFOShardSubscribersPool {
 
   /** Adds a {@link EventRecords} iterator for shardId and event to {@link #eventQueue}. */
   void enqueueEvent(String shardId, SubscribeToShardEvent event) {
-    eventQueue.offer(new EventRecords(read.getStreamName(), shardId, event));
+    eventQueue.offer(new EventRecords(shardId, event));
   }
 
   public Instant getWatermark() {
     return latestRecordTimestampPolicy.getWatermark();
   }
 
+  /** This is assumed to be never called before {@link #start} is called. */
   public KinesisReaderCheckpoint getCheckpointMark() {
-    // FIXME pls use for loop, unless streams provide much better readability
-    List<ShardCheckpoint> checkpoints =
-        state.entrySet().stream()
-            .map(
-                entry -> {
-                  // FIXME: this must take into account initial checkpoint the pool was started with
-                  // Example - with specific timestamp
-                  if (entry.getValue().sequenceNumber == null) {
-                    return new ShardCheckpoint(
-                        read.getStreamName(),
-                        entry.getKey(),
-                        new StartingPoint(InitialPositionInStream.TRIM_HORIZON));
-                  } else {
-                    return new ShardCheckpoint(
-                        read.getStreamName(),
-                        entry.getKey(),
-                        ShardIteratorType.AFTER_SEQUENCE_NUMBER,
-                        entry.getValue().sequenceNumber,
-                        entry.getValue().subSequenceNumber);
-                  }
-                })
-            .collect(Collectors.toList());
+    List<ShardCheckpoint> checkpoints = new ArrayList<>();
+    for (ShardState shardState : state.values()) {
+      checkpoints.add(shardState.toCheckpoint());
+    }
 
     return new KinesisReaderCheckpoint(checkpoints);
   }
@@ -362,17 +346,27 @@ class EFOShardSubscribersPool {
   /**
    * Mutable class tracking state and progress per shard.
    *
-   * <p>A {@link ShardCheckpoint} is the immutable correspondence to this using iterator type {@link
-   * ShardIteratorType#AFTER_SEQUENCE_NUMBER} or {@link ShardIteratorType#TRIM_HORIZON} for new
-   * shards if {@link #sequenceNumber} is not set yet.
+   * <p>When {@link #getCheckpointMark()} is called, {@link ShardCheckpoint} instances are created
+   * from these objects, and 3 cases are possible:
+   *
+   * <ul>
+   *   <li>Pool is just created, and a shard never gave out any record - {@link ShardCheckpoint}
+   *       falls back to {@link ShardState#initCheckpoint}
+   *   <li>Pool was running and got re-shard events - same as above
+   *   <li>Pool was running, and gave out events - use {@link ShardState#sequenceNumber} and {@link
+   *       ShardState#subSequenceNumber}
+   * </ul>
    */
   private static class ShardState {
-    EFOShardSubscriber subscriber;
+    final EFOShardSubscriber subscriber;
+    final ShardCheckpoint initCheckpoint;
+
     @Nullable String sequenceNumber = null;
     long subSequenceNumber = 0L;
 
-    ShardState(EFOShardSubscriber subscriber) {
+    ShardState(EFOShardSubscriber subscriber, ShardCheckpoint initCheckpoint) {
       this.subscriber = subscriber;
+      this.initCheckpoint = initCheckpoint;
     }
 
     void update(KinesisClientRecord r) {
@@ -385,6 +379,21 @@ class EFOShardSubscribersPool {
       subSequenceNumber = 0L;
       subscriber.ackEvent();
     }
+
+    ShardCheckpoint toCheckpoint() {
+      if (sequenceNumber != null) {
+        return new ShardCheckpoint(
+            initCheckpoint.getStreamName(),
+            initCheckpoint.getShardId(),
+            ShardIteratorType.AFTER_SEQUENCE_NUMBER,
+            sequenceNumber,
+            subSequenceNumber);
+      } else {
+        // sequenceNumber was never updated for this shard,
+        // fall back to its init checkpoint
+        return initCheckpoint;
+      }
+    }
   }
 
   /**
@@ -395,14 +404,11 @@ class EFOShardSubscribersPool {
    */
   private static class EventRecords extends ForwardingIterator<KinesisClientRecord> {
     private static final AggregatorUtil AGG_UTIL = new AggregatorUtil();
-    // FIXME streamName is never used? Should be removed then.
-    String streamName;
     String shardId;
     SubscribeToShardEvent event;
     @MonotonicNonNull Iterator<KinesisClientRecord> delegate = null;
 
-    public EventRecords(String streamName, String shardId, SubscribeToShardEvent event) {
-      this.streamName = streamName;
+    public EventRecords(String shardId, SubscribeToShardEvent event) {
       this.shardId = shardId;
       this.event = event;
     }
