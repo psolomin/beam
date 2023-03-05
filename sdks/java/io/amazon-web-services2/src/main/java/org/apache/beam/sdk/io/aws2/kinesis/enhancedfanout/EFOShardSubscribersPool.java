@@ -60,32 +60,19 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
-/**
- * TODO: - switch to existing ShardCheckpoint - we don't care what consumer name was, we want to
- * switch back and forth from / to EFO - back-fill - EFO consumer, then use normal consumer to keep
- * going - test with real Kinesis - check whenComplete (netty) vs whenCompleteAsync (fork join pool)
- * - Work on testing & stub - think of delay of re-connect (in the pool -
- * oneThreadScheduledExecService) - Re-sharding: state is always reflecting the ack-ed checkpoint,
- * so getNextRecord() executes actual state mutations. The caller of that thing will handle starting
- * new subscriptions and deleting the orphaned shards' checkpoints from the map. - Inner classes are
- * fine: - You limit public surface, clear isolation - Everything in the package level - hard to
- * navigate, too many classes - Inner class can be used only in the context of enclosing class, it
- * is more clear - Readers don't need to worry about all the places class can be re-used -
- * KinesisIO.Read / Write - Javadoc is easier to navigate - Sometimes classes with inner classes
- * become too huge - Static helper classes (Util) used in a single place - also good candidates for
- * inner classes - If you really re-use over and over - better not to - DirectRunner interrupts and
- * re-creates new sources too often. Use FlinkRunner - Config class - potential alternative - Client
- * configuration - option: not to have back-offs in custom code, client itself has back-offs
- * internally - we can think of this later, add any custom back offs as late as possible - ?
- * recommend in javadoc to use large initial back offs ?
- */
 @SuppressWarnings({"nullness"})
 class EFOShardSubscribersPool {
   private static final Logger LOG = LoggerFactory.getLogger(EFOShardSubscribersPool.class);
   private static final int ON_ERROR_COOL_DOWN_MS_DEFAULT = 1_000;
   private final int onErrorCoolDownMs;
 
+  /**
+   * Identifier of the current subscribers pool.
+   *
+   * <p>Injected into other objects which belong to this pool to ease tracing with logs.
+   */
   private final UUID poolId;
+
   private final KinesisIO.Read read;
   private final KinesisAsyncClient kinesis;
 

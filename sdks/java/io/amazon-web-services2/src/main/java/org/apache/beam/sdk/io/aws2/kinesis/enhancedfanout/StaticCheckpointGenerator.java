@@ -26,8 +26,9 @@ import org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 
 /**
- * Always returns injected checkpoint. Used when stored checkpoint exists. TODO: add validation to
- * check if stored checkpoint is "rotten"?
+ * Always returns injected checkpoint. Used when stored checkpoint exists.
+ *
+ * <p>TODO: add validation to check if stored checkpoint is "rotten"</p>
  */
 class StaticCheckpointGenerator implements CheckpointGenerator {
 

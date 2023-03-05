@@ -64,7 +64,7 @@ class EFOShardSubscriber {
 
   // Shard id of this subscriber
   private final String shardId;
-  // Read configuration
+
   private final KinesisAsyncClient kinesis;
 
   /** Internal subscriber state */
