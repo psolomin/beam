@@ -17,12 +17,17 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
+import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.RecordsGenerators.eventWithOutRecords;
+
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.awssdk.services.kinesis.model.StartingPosition;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.kinesis.common.InitialPositionInStream;
 
@@ -67,5 +72,14 @@ class Helpers {
         .shardId(shardId)
         .startingPosition(StartingPosition.builder().type(ShardIteratorType.TRIM_HORIZON).build())
         .build();
+  }
+
+  static SubscribeToShardEvent[] eventsWithoutRecords(int numEvent, int startingSeqNum) {
+    List<SubscribeToShardEvent> events = new ArrayList<>();
+    for (int i = 0; i < numEvent; i++) {
+      events.add(eventWithOutRecords(startingSeqNum));
+      startingSeqNum++;
+    }
+    return events.toArray(new SubscribeToShardEvent[numEvent]);
   }
 }
