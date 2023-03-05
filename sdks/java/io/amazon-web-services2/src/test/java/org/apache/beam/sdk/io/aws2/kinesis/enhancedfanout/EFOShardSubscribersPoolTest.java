@@ -17,6 +17,7 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static junit.framework.TestCase.assertTrue;
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.Helpers.createReadSpec;
 import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.Helpers.eventsWithoutRecords;
@@ -32,9 +33,12 @@ import static org.junit.Assert.assertThrows;
 
 import io.netty.handler.timeout.ReadTimeoutException;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletionException;
+import java.util.stream.Collectors;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisReaderCheckpoint;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
@@ -62,7 +66,7 @@ public class EFOShardSubscribersPoolTest {
   }
 
   @After
-  public void tearDown() throws InterruptedException {
+  public void tearDown() {
     kinesis.close();
     pool.stop();
   }
@@ -83,8 +87,9 @@ public class EFOShardSubscribersPoolTest {
 
     pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);
-    List<KinesisRecord> actualRecords = waitForRecords(pool, 19);
-    assertEquals(18, actualRecords.size());
+    List<KinesisRecord> actualRecords = waitForRecords(pool, 18);
+    validateRecords(actualRecords);
+    assertThat(waitForRecords(pool, 3).size()).isEqualTo(0); // nothing more is received
 
     assertThat(kinesis.listRequestsSeen()).containsExactlyInAnyOrder(listLatest());
 
@@ -164,7 +169,6 @@ public class EFOShardSubscribersPoolTest {
     assertThat(waitForRecords(pool, 25)).hasSize(18);
     assertThat(kinesis.listRequestsSeen()).containsExactlyInAnyOrder(listLatest());
 
-    // FIXME: flaky test
     assertThat(kinesis.subscribeRequestsSeen())
         .containsExactlyInAnyOrder(
             subscribeLatest("shard-000"),
@@ -447,5 +451,104 @@ public class EFOShardSubscribersPoolTest {
       }
     }
     return records;
+  }
+
+  private void validateRecords(List<KinesisRecord> records) {
+    List<RecordDataToCheck> internalRecords =
+        records.stream().map(RecordDataToCheck::fromKinesisRecord).collect(Collectors.toList());
+
+    assertThat(internalRecords)
+        .hasSize(18)
+        .containsExactlyInAnyOrder(
+            new RecordDataToCheck("shard-000", "0"),
+            new RecordDataToCheck("shard-000", "1"),
+            new RecordDataToCheck("shard-000", "2"),
+            new RecordDataToCheck("shard-000", "3"),
+            new RecordDataToCheck("shard-000", "4"),
+            new RecordDataToCheck("shard-000", "5"),
+            new RecordDataToCheck("shard-000", "6"),
+            new RecordDataToCheck("shard-000", "7"),
+            new RecordDataToCheck("shard-000", "8"),
+            new RecordDataToCheck("shard-000", "9"),
+            new RecordDataToCheck("shard-001", "0"),
+            new RecordDataToCheck("shard-001", "1"),
+            new RecordDataToCheck("shard-001", "2"),
+            new RecordDataToCheck("shard-001", "3"),
+            new RecordDataToCheck("shard-001", "4"),
+            new RecordDataToCheck("shard-001", "5"),
+            new RecordDataToCheck("shard-001", "6"),
+            new RecordDataToCheck("shard-001", "7"));
+  }
+
+  private static ByteBuffer fromStr(String str) {
+    return ByteBuffer.wrap(str.getBytes(UTF_8));
+  }
+
+  private static class RecordDataToCheck {
+    private final String shardId;
+    private final String sequenceNumber;
+    private final long subSequenceNumber;
+    private final ByteBuffer data;
+
+    static RecordDataToCheck fromKinesisRecord(KinesisRecord kinesisRecord) {
+      return new RecordDataToCheck(
+          kinesisRecord.getShardId(),
+          kinesisRecord.getSequenceNumber(),
+          kinesisRecord.getSubSequenceNumber(),
+          kinesisRecord.getData());
+    }
+
+    public RecordDataToCheck(
+        String shardId, String sequenceNumber, long subSequenceNumber, ByteBuffer data) {
+      this.shardId = shardId;
+      this.sequenceNumber = sequenceNumber;
+      this.subSequenceNumber = subSequenceNumber;
+      this.data = data;
+    }
+
+    public RecordDataToCheck(String shardId, String sequenceNumber, ByteBuffer data) {
+      this.shardId = shardId;
+      this.sequenceNumber = sequenceNumber;
+      this.subSequenceNumber = 0L;
+      this.data = data;
+    }
+
+    public RecordDataToCheck(String shardId, String sequenceNumber) {
+      this.shardId = shardId;
+      this.sequenceNumber = sequenceNumber;
+      this.subSequenceNumber = 0L;
+      this.data = fromStr(sequenceNumber);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+      RecordDataToCheck that = (RecordDataToCheck) o;
+      return subSequenceNumber == that.subSequenceNumber
+          && shardId.equals(that.shardId)
+          && sequenceNumber.equals(that.sequenceNumber)
+          && data.equals(that.data);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(shardId, sequenceNumber, subSequenceNumber, data);
+    }
+
+    @Override
+    public String toString() {
+      return "{"
+          + "shardId='"
+          + shardId
+          + '\''
+          + ", sequenceNumber='"
+          + sequenceNumber
+          + '\''
+          + ", subSequenceNumber="
+          + subSequenceNumber
+          + ", data=<...>"
+          + '}';
+    }
   }
 }
