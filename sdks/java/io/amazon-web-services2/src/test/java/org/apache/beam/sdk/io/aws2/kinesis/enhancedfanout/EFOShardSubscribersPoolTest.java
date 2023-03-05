@@ -35,6 +35,7 @@ import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisReaderCheckpoint;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisRecord;
 import org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint;
+import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
 import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 import org.junit.After;
@@ -45,7 +46,7 @@ import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
-import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
+import software.amazon.kinesis.common.InitialPositionInStream;
 
 public class EFOShardSubscribersPoolTest {
   private KinesisIO.Read readSpec;
@@ -84,15 +85,16 @@ public class EFOShardSubscribersPoolTest {
 
     assertThat(kinesis.listRequestsSeen()).containsExactlyInAnyOrder(Helpers.listLatest());
 
-    List<SubscribeToShardRequest> expectedSubscribeRequests =
-        ImmutableList.of(
+    assertThat(kinesis.subscribeRequestsSeen())
+        .containsExactlyInAnyOrder(
             Helpers.subscribeLatest("shard-000"),
             Helpers.subscribeLatest("shard-001"),
             Helpers.subscribeAfterSeqNumber("shard-000", "2"),
             Helpers.subscribeAfterSeqNumber("shard-001", "2"),
             Helpers.subscribeAfterSeqNumber("shard-000", "9"),
-            Helpers.subscribeAfterSeqNumber("shard-001", "7"));
-    assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
+            Helpers.subscribeAfterSeqNumber("shard-001", "7"),
+            Helpers.subscribeAfterSeqNumber("shard-000", "12"),
+            Helpers.subscribeAfterSeqNumber("shard-001", "10"));
 
     assertThat(pool.getCheckpointMark().iterator())
         .containsExactlyInAnyOrder(
@@ -117,13 +119,12 @@ public class EFOShardSubscribersPoolTest {
     assertEquals(0, actualRecords.size());
 
     assertThat(kinesis.listRequestsSeen()).containsExactlyInAnyOrder(Helpers.listLatest());
-    List<SubscribeToShardRequest> expectedSubscribeRequests =
-        ImmutableList.of(
+    assertThat(kinesis.subscribeRequestsSeen())
+        .containsExactlyInAnyOrder(
             Helpers.subscribeLatest("shard-000"),
             Helpers.subscribeLatest("shard-001"),
             Helpers.subscribeAfterSeqNumber("shard-000", "33"),
             Helpers.subscribeAfterSeqNumber("shard-001", "10"));
-    assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
 
     List<ShardCheckpoint> expectedCheckPoint =
         ImmutableList.of(
@@ -213,15 +214,13 @@ public class EFOShardSubscribersPoolTest {
     assertThat(kinesis.listRequestsSeen()).containsExactlyInAnyOrder(Helpers.listLatest());
 
     // consumer will still get some records and advance checkpoint
-    List<ShardCheckpoint> expectedCheckPoint =
-        ImmutableList.of(
-            new ShardCheckpoint(
-                "stream-01", "shard-001", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "9", 0L),
-            new ShardCheckpoint(
-                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "9", 0L));
-    KinesisReaderCheckpoint actualCheckPoint = pool.getCheckpointMark();
     // FIXME: flaky
-    assertEquals(expectedCheckPoint, ImmutableList.copyOf(actualCheckPoint.iterator()));
+    assertThat(pool.getCheckpointMark())
+        .containsExactlyInAnyOrder(
+            new ShardCheckpoint(
+                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "9", 0L),
+            new ShardCheckpoint(
+                "stream-01", "shard-001", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "9", 0L));
   }
 
   @Test
@@ -297,18 +296,25 @@ public class EFOShardSubscribersPoolTest {
     assertEquals(34, actualRecords.size());
 
     assertThat(kinesis.listRequestsSeen()).containsExactlyInAnyOrder(Helpers.listLatest());
-    List<SubscribeToShardRequest> expectedSubscribeRequests =
-        ImmutableList.of(
+    assertThat(kinesis.subscribeRequestsSeen())
+        .containsExactlyInAnyOrder(
             Helpers.subscribeLatest("shard-000"),
             Helpers.subscribeLatest("shard-001"),
             Helpers.subscribeAfterSeqNumber("shard-000", "2"),
             Helpers.subscribeAfterSeqNumber("shard-001", "2"),
             Helpers.subscribeAfterSeqNumber("shard-000", "9"),
             Helpers.subscribeAfterSeqNumber("shard-001", "7"),
+            Helpers.subscribeAfterSeqNumber("shard-000", "10"),
+            Helpers.subscribeAfterSeqNumber("shard-001", "8"),
             Helpers.subscribeTrimHorizon("shard-002"),
             Helpers.subscribeTrimHorizon("shard-003"),
-            Helpers.subscribeTrimHorizon("shard-004"));
-    assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
+            Helpers.subscribeTrimHorizon("shard-004"),
+            Helpers.subscribeAfterSeqNumber("shard-002", "4"),
+            Helpers.subscribeAfterSeqNumber("shard-003", "5"),
+            Helpers.subscribeAfterSeqNumber("shard-004", "4"),
+            Helpers.subscribeAfterSeqNumber("shard-002", "7"),
+            Helpers.subscribeAfterSeqNumber("shard-003", "8"),
+            Helpers.subscribeAfterSeqNumber("shard-004", "6"));
 
     assertThat(pool.getCheckpointMark().iterator())
         .containsExactlyInAnyOrder(
@@ -366,15 +372,27 @@ public class EFOShardSubscribersPoolTest {
     assertEquals(37, actualRecords.size());
 
     assertThat(kinesis.listRequestsSeen()).containsExactlyInAnyOrder(Helpers.listLatest());
-    List<SubscribeToShardRequest> expectedSubscribeRequests =
-        ImmutableList.of(
+    assertThat(kinesis.subscribeRequestsSeen())
+        .containsExactlyInAnyOrder(
             Helpers.subscribeLatest("shard-000"),
             Helpers.subscribeLatest("shard-001"),
             Helpers.subscribeLatest("shard-002"),
             Helpers.subscribeLatest("shard-003"),
+            Helpers.subscribeAfterSeqNumber("shard-000", "2"),
+            Helpers.subscribeAfterSeqNumber("shard-001", "4"),
+            Helpers.subscribeAfterSeqNumber("shard-002", "4"),
+            Helpers.subscribeAfterSeqNumber("shard-003", "4"),
+            Helpers.subscribeAfterSeqNumber("shard-000", "9"),
+            Helpers.subscribeAfterSeqNumber("shard-001", "6"),
+            Helpers.subscribeAfterSeqNumber("shard-002", "6"),
+            Helpers.subscribeAfterSeqNumber("shard-003", "6"),
+            Helpers.subscribeAfterSeqNumber("shard-000", "10"),
             Helpers.subscribeTrimHorizon("shard-004"),
-            Helpers.subscribeTrimHorizon("shard-005"));
-    assertTrue(kinesis.subscribeRequestsSeen().containsAll(expectedSubscribeRequests));
+            Helpers.subscribeTrimHorizon("shard-005"),
+            Helpers.subscribeAfterSeqNumber("shard-004", "5"),
+            Helpers.subscribeAfterSeqNumber("shard-005", "5"),
+            Helpers.subscribeAfterSeqNumber("shard-004", "8"),
+            Helpers.subscribeAfterSeqNumber("shard-005", "8"));
 
     assertThat(pool.getCheckpointMark().iterator())
         .containsExactlyInAnyOrder(
@@ -394,7 +412,15 @@ public class EFOShardSubscribersPoolTest {
 
     pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);
-    assertThat(pool.getCheckpointMark().iterator()).containsAll(initialCheckpoint);
+    ShardCheckpoint[] expectedShardsCheckpoints = {
+      new ShardCheckpoint(
+          "stream-01", "shard-000", new StartingPoint(InitialPositionInStream.LATEST)),
+      new ShardCheckpoint(
+          "stream-01", "shard-001", new StartingPoint(InitialPositionInStream.LATEST))
+    };
+    assertThat(initialCheckpoint.iterator()).containsExactlyInAnyOrder(expectedShardsCheckpoints);
+    assertThat(pool.getCheckpointMark().iterator())
+        .containsExactlyInAnyOrder(expectedShardsCheckpoints);
     assertThat(kinesis.listRequestsSeen()).containsExactlyInAnyOrder(Helpers.listLatest());
   }
 
