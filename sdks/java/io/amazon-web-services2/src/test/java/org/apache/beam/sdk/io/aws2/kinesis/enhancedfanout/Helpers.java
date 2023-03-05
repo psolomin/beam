@@ -18,6 +18,9 @@
 package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
 
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
+import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
+import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.awssdk.services.kinesis.model.StartingPosition;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
@@ -29,6 +32,13 @@ class Helpers {
         .withStreamName("stream-01")
         .withConsumerArn("consumer-01")
         .withInitialPositionInStream(InitialPositionInStream.LATEST);
+  }
+
+  static ListShardsRequest listLatest() {
+    return ListShardsRequest.builder()
+        .streamName("stream-01")
+        .shardFilter(ShardFilter.builder().type(ShardFilterType.AT_LATEST).build())
+        .build();
   }
 
   static SubscribeToShardRequest subscribeLatest(String shardId) {

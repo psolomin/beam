@@ -82,6 +82,8 @@ public class EFOShardSubscribersPoolTest {
     List<KinesisRecord> actualRecords = waitForRecords(pool, 19);
     assertEquals(18, actualRecords.size());
 
+    assertThat(kinesis.listRequestsSeen()).containsExactlyInAnyOrder(Helpers.listLatest());
+
     List<SubscribeToShardRequest> expectedSubscribeRequests =
         ImmutableList.of(
             Helpers.subscribeLatest("shard-000"),
@@ -114,6 +116,7 @@ public class EFOShardSubscribersPoolTest {
     List<KinesisRecord> actualRecords = waitForRecords(pool, 1);
     assertEquals(0, actualRecords.size());
 
+    assertThat(kinesis.listRequestsSeen()).containsExactlyInAnyOrder(Helpers.listLatest());
     List<SubscribeToShardRequest> expectedSubscribeRequests =
         ImmutableList.of(
             Helpers.subscribeLatest("shard-000"),
@@ -155,6 +158,7 @@ public class EFOShardSubscribersPoolTest {
     pool.start(initialCheckpoint);
 
     assertThat(waitForRecords(pool, 18)).hasSize(18);
+    assertThat(kinesis.listRequestsSeen()).containsExactlyInAnyOrder(Helpers.listLatest());
 
     // FIXME: flaky test
     assertThat(kinesis.subscribeRequestsSeen())
@@ -206,6 +210,8 @@ public class EFOShardSubscribersPoolTest {
     assertEquals("java.lang.RuntimeException: Oh...", exception.getMessage());
     assertTrue(exception.getCause() instanceof RuntimeException);
 
+    assertThat(kinesis.listRequestsSeen()).containsExactlyInAnyOrder(Helpers.listLatest());
+
     // consumer will still get some records and advance checkpoint
     List<ShardCheckpoint> expectedCheckPoint =
         ImmutableList.of(
@@ -254,6 +260,8 @@ public class EFOShardSubscribersPoolTest {
     assertEquals(
         "Consumer consumer-01 not found. (Service: Kinesis, Status Code: 0, Request ID: null)",
         cause.getMessage());
+
+    assertThat(kinesis.listRequestsSeen()).containsExactlyInAnyOrder(Helpers.listLatest());
   }
 
   @Test
@@ -288,6 +296,7 @@ public class EFOShardSubscribersPoolTest {
     List<KinesisRecord> actualRecords = waitForRecords(pool, 35);
     assertEquals(34, actualRecords.size());
 
+    assertThat(kinesis.listRequestsSeen()).containsExactlyInAnyOrder(Helpers.listLatest());
     List<SubscribeToShardRequest> expectedSubscribeRequests =
         ImmutableList.of(
             Helpers.subscribeLatest("shard-000"),
@@ -356,6 +365,7 @@ public class EFOShardSubscribersPoolTest {
     List<KinesisRecord> actualRecords = waitForRecords(pool, 38);
     assertEquals(37, actualRecords.size());
 
+    assertThat(kinesis.listRequestsSeen()).containsExactlyInAnyOrder(Helpers.listLatest());
     List<SubscribeToShardRequest> expectedSubscribeRequests =
         ImmutableList.of(
             Helpers.subscribeLatest("shard-000"),
@@ -385,6 +395,7 @@ public class EFOShardSubscribersPoolTest {
     pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);
     assertThat(pool.getCheckpointMark().iterator()).containsAll(initialCheckpoint);
+    assertThat(kinesis.listRequestsSeen()).containsExactlyInAnyOrder(Helpers.listLatest());
   }
 
   // FIXME pls use consistent style when stubbing

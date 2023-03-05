@@ -56,6 +56,8 @@ class StubbedKinesisAsyncClient implements KinesisAsyncClient {
   private final Map<String, Deque<StubbedSdkPublisher>> stubbedPublishers = new HashMap<>();
   private final List<String> initialShardsIds;
 
+  private final ConcurrentLinkedQueue<ListShardsRequest> listShardsRequestsSeen =
+      new ConcurrentLinkedQueue<>();
   private final ConcurrentLinkedQueue<SubscribeToShardRequest> subscribeRequestsSeen =
       new ConcurrentLinkedQueue<>();
 
@@ -97,6 +99,7 @@ class StubbedKinesisAsyncClient implements KinesisAsyncClient {
 
   @Override
   public CompletableFuture<ListShardsResponse> listShards(ListShardsRequest listShardsRequest) {
+    listShardsRequestsSeen.add(listShardsRequest);
     return CompletableFuture.completedFuture(
         ListShardsResponse.builder().shards(buildShards()).build());
   }
@@ -192,5 +195,9 @@ class StubbedKinesisAsyncClient implements KinesisAsyncClient {
 
   public List<SubscribeToShardRequest> subscribeRequestsSeen() {
     return new ArrayList<>(subscribeRequestsSeen);
+  }
+
+  public List<ListShardsRequest> listRequestsSeen() {
+    return new ArrayList<>(listShardsRequestsSeen);
   }
 }
