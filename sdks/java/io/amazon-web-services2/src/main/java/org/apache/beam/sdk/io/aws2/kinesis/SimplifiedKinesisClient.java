@@ -17,11 +17,11 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis;
 
-import static org.apache.beam.sdk.io.aws2.kinesis.ErrorsUtils.wrapExceptions;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.apache.beam.sdk.util.BackOff;
@@ -32,6 +32,9 @@ import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.Immutabl
 import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.joda.time.Minutes;
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.exception.SdkServiceException;
+import software.amazon.awssdk.core.internal.retry.SdkDefaultRetrySetting;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
 import software.amazon.awssdk.services.cloudwatch.model.Datapoint;
 import software.amazon.awssdk.services.cloudwatch.model.Dimension;
@@ -40,12 +43,14 @@ import software.amazon.awssdk.services.cloudwatch.model.GetMetricStatisticsRespo
 import software.amazon.awssdk.services.cloudwatch.model.Statistic;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryRequest;
+import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
 import software.amazon.awssdk.services.kinesis.model.LimitExceededException;
 import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
+import software.amazon.awssdk.services.kinesis.model.ProvisionedThroughputExceededException;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.services.kinesis.model.ShardFilter;
@@ -320,10 +325,42 @@ class SimplifiedKinesisClient implements AutoCloseable {
         .build();
   }
 
+  /**
+   * Wraps Amazon specific exceptions into more friendly format.
+   *
+   * @throws TransientKinesisException - in case of recoverable situation, i.e. the request rate is
+   *     too high, Kinesis remote service failed, network issue, etc.
+   * @throws ExpiredIteratorException - if iterator needs to be refreshed
+   * @throws RuntimeException - in all other cases
+   */
+  private <T> T wrapExceptions(Callable<T> callable) throws TransientKinesisException {
+    try {
+      return callable.call();
+    } catch (ExpiredIteratorException e) {
+      throw e;
+    } catch (LimitExceededException | ProvisionedThroughputExceededException e) {
+      throw new KinesisClientThrottledException(
+          "Too many requests to Kinesis. Wait some time and retry.", e);
+    } catch (SdkServiceException e) {
+      if (e.isThrottlingException()
+          || SdkDefaultRetrySetting.RETRYABLE_STATUS_CODES.contains(e.statusCode())) {
+        throw new TransientKinesisException("Kinesis backend failed. Wait some time and retry.", e);
+      }
+      throw e; // others, such as 4xx, are not retryable
+    } catch (SdkClientException e) {
+      if (SdkDefaultRetrySetting.RETRYABLE_EXCEPTIONS.contains(e.getClass())) {
+        throw new TransientKinesisException("Retryable failure", e);
+      }
+      throw e;
+    } catch (Exception e) {
+      throw new RuntimeException("Unknown kinesis failure, when trying to reach kinesis", e);
+    }
+  }
+
   @Override
   public void close() throws Exception {
     try (AutoCloseable c1 = kinesis;
-        AutoCloseable c3 = cloudWatch) {
+        AutoCloseable c2 = cloudWatch) {
       // nothing to do
     }
   }
