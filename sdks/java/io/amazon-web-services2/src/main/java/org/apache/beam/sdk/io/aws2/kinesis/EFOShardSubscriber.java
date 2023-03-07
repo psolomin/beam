@@ -66,7 +66,7 @@ class EFOShardSubscriber {
 
   private final KinesisAsyncClient kinesis;
 
-  /** Internal subscriber state */
+  /** Internal subscriber state. */
   private volatile State state = INITIALIZED;
 
   /**
@@ -165,7 +165,6 @@ class EFOShardSubscriber {
    * @return {@link #done} to signal completion of this subscriber, normally (stopped or shard is
    *     completely consumed) or exceptionally due to a non retryable error.
    */
-  @SuppressWarnings("FutureReturnValueIgnored")
   CompletableFuture<Void> subscribe(StartingPosition position) {
     checkState(state == INITIALIZED, "Subscriber was already started");
     return internalSubscribe(position);

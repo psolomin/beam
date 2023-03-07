@@ -29,7 +29,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 
-@SuppressWarnings("unused")
 class EFOKinesisReader extends UnboundedSource.UnboundedReader<KinesisRecord> {
 
   private static final Logger LOG = LoggerFactory.getLogger(EFOKinesisReader.class);

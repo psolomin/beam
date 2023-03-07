@@ -20,7 +20,6 @@ package org.apache.beam.sdk.io.aws2.kinesis;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
-import avro.shaded.com.google.common.base.Objects;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -34,6 +33,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
+
+import avro.shaded.com.google.common.base.Objects;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import software.amazon.awssdk.core.async.SdkPublisher;
@@ -46,7 +47,7 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEventStream
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 
-@SuppressWarnings({"MissingOverride", "FutureReturnValueIgnored"})
+@SuppressWarnings({"FutureReturnValueIgnored"})
 class EFOStubbedKinesisAsyncClient implements KinesisAsyncClient {
 
   private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
@@ -150,6 +151,7 @@ class EFOStubbedKinesisAsyncClient implements KinesisAsyncClient {
       this.events = events;
     }
 
+    @Override
     public void failWith(Throwable error) {
       this.error = error;
     }

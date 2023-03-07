@@ -553,8 +553,12 @@ public class EFOShardSubscribersPoolTest {
 
     @Override
     public boolean equals(Object o) {
-      if (this == o) return true;
-      if (o == null || getClass() != o.getClass()) return false;
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
       RecordDataToCheck that = (RecordDataToCheck) o;
       return subSequenceNumber == that.subSequenceNumber
           && shardId.equals(that.shardId)
