@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.apache.beam.sdk.io.aws2.kinesis.RecordsAggregator;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.Record;
@@ -81,5 +82,23 @@ class RecordsGenerators {
       records.add(createRecord(i));
     }
     return eventWithRecords(records);
+  }
+
+  static SubscribeToShardEvent eventWithAggRecords(int startSeqNumber, int numRecords) {
+    RecordsAggregator aggregator = new RecordsAggregator(1024, new org.joda.time.Instant());
+    for (int i = startSeqNumber; i < startSeqNumber + numRecords; i++) {
+      aggregator.addRecord("foo", null, String.valueOf(i).getBytes(UTF_8));
+    }
+
+    return SubscribeToShardEvent.builder()
+        .continuationSequenceNumber(String.valueOf(startSeqNumber))
+        .records(
+            Record.builder()
+                .approximateArrivalTimestamp(Instant.now())
+                .sequenceNumber(String.valueOf(startSeqNumber))
+                .partitionKey("foo")
+                .data(SdkBytes.fromByteArray(aggregator.toBytes()))
+                .build())
+        .build();
   }
 }

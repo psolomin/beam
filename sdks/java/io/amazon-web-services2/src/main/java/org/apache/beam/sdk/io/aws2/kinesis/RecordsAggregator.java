@@ -45,7 +45,7 @@ import software.amazon.kinesis.retrieval.kpl.Messages.AggregatedRecord;
  */
 @NotThreadSafe
 @Internal
-class RecordsAggregator {
+public class RecordsAggregator {
   private static final byte[] MAGIC_BYTES = AggregatorUtil.AGGREGATED_RECORD_MAGIC;
   private static final int DIGEST_SIZE = 16;
   @VisibleForTesting static final int BASE_OVERHEAD = MAGIC_BYTES.length + DIGEST_SIZE;
@@ -57,7 +57,7 @@ class RecordsAggregator {
   private int sizeBytes;
   private Instant timeout;
 
-  RecordsAggregator(int maxAggregatedBytes, Instant timeout) {
+  public RecordsAggregator(int maxAggregatedBytes, Instant timeout) {
     this.maxAggregatedBytes = maxAggregatedBytes;
     this.aggBuilder = AggregatedRecord.newBuilder();
     this.partitionKeys = new TreeMap<>();
@@ -70,7 +70,7 @@ class RecordsAggregator {
     return aggBuilder.getRecordsCount();
   }
 
-  boolean addRecord(String partitionKey, @Nullable String explicitHashKey, byte[] record) {
+  public boolean addRecord(String partitionKey, @Nullable String explicitHashKey, byte[] record) {
     int recordSize = sizeIncrement(partitionKey, explicitHashKey, record);
     if (sizeBytes + recordSize > maxAggregatedBytes) {
       return false;
@@ -163,8 +163,7 @@ class RecordsAggregator {
     return sizeBytes;
   }
 
-  @VisibleForTesting
-  protected byte[] toBytes() {
+  public byte[] toBytes() {
     try {
       MessageDigest md5 = MessageDigest.getInstance("md5");
       byte[] body = aggBuilder.build().toByteArray();
