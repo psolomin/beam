@@ -15,13 +15,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
+package org.apache.beam.sdk.io.aws2.kinesis;
 
-import static org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout.RecordsGenerators.eventWithOutRecords;
+import static org.apache.beam.sdk.io.aws2.kinesis.EFORecordsGenerators.eventWithOutRecords;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
 import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
@@ -31,8 +30,8 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.kinesis.common.InitialPositionInStream;
 
-class Helpers {
-  public static KinesisIO.Read createReadSpec() {
+class EFOHelpers {
+  static KinesisIO.Read createReadSpec() {
     return KinesisIO.read()
         .withStreamName("stream-01")
         .withConsumerArn("consumer-01")

@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
+package org.apache.beam.sdk.io.aws2.kinesis;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
@@ -23,13 +23,12 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
-import org.apache.beam.sdk.io.aws2.kinesis.RecordsAggregator;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 
-class RecordsGenerators {
+class EFORecordsGenerators {
   static Record createRecord(Integer sequenceNumber) {
     return Record.builder()
         .partitionKey("foo")

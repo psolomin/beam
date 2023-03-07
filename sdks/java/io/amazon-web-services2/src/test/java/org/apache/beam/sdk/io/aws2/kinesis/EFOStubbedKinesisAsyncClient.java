@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
+package org.apache.beam.sdk.io.aws2.kinesis;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
@@ -47,7 +47,7 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 
 @SuppressWarnings({"MissingOverride", "FutureReturnValueIgnored"})
-class StubbedKinesisAsyncClient implements KinesisAsyncClient {
+class EFOStubbedKinesisAsyncClient implements KinesisAsyncClient {
 
   private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
@@ -61,7 +61,7 @@ class StubbedKinesisAsyncClient implements KinesisAsyncClient {
   private final ConcurrentLinkedQueue<SubscribeToShardRequest> subscribeRequestsSeen =
       new ConcurrentLinkedQueue<>();
 
-  StubbedKinesisAsyncClient(int publisherRateMs, List<String> initialShardsIds) {
+  EFOStubbedKinesisAsyncClient(int publisherRateMs, List<String> initialShardsIds) {
     this.publisherRateMs = publisherRateMs;
     this.initialShardsIds = initialShardsIds;
   }
@@ -70,7 +70,7 @@ class StubbedKinesisAsyncClient implements KinesisAsyncClient {
    * Stubs a subscribeToShard call with the provided events, optionally terminating with an error or
    * otherwise normally as soon as all events are delivered.
    */
-  public CanFail stubSubscribeToShard(String shardId, SubscribeToShardEventStream... events) {
+  CanFail stubSubscribeToShard(String shardId, SubscribeToShardEventStream... events) {
     StubbedSdkPublisher publisher = new StubbedSdkPublisher(events);
     stubbedPublishers.computeIfAbsent(shardId, id -> new ArrayDeque<>()).add(publisher);
     return publisher;
@@ -116,7 +116,7 @@ class StubbedKinesisAsyncClient implements KinesisAsyncClient {
         .collect(Collectors.toList());
   }
 
-  public interface CanFail {
+  interface CanFail {
     void failWith(Throwable error);
   }
 
@@ -193,11 +193,11 @@ class StubbedKinesisAsyncClient implements KinesisAsyncClient {
     }
   }
 
-  public List<SubscribeToShardRequest> subscribeRequestsSeen() {
+  List<SubscribeToShardRequest> subscribeRequestsSeen() {
     return new ArrayList<>(subscribeRequestsSeen);
   }
 
-  public List<ListShardsRequest> listRequestsSeen() {
+  List<ListShardsRequest> listRequestsSeen() {
     return new ArrayList<>(listShardsRequestsSeen);
   }
 }

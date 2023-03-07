@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.kinesis.enhancedfanout;
+package org.apache.beam.sdk.io.aws2.kinesis;
 
 import static org.apache.beam.sdk.util.Preconditions.checkArgumentNotNull;
 
@@ -24,12 +24,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
-import org.apache.beam.sdk.io.aws2.kinesis.KinesisIO;
-import org.apache.beam.sdk.io.aws2.kinesis.KinesisReaderCheckpoint;
-import org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint;
-import org.apache.beam.sdk.io.aws2.kinesis.StartingPoint;
-import org.apache.beam.sdk.io.aws2.kinesis.TimeUtil;
-import org.apache.beam.sdk.io.aws2.kinesis.TransientKinesisException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -42,13 +36,17 @@ import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
  * Creates {@link KinesisReaderCheckpoint} when stored checkpoint is not available or outdated. List
  * of shards is obtained from Kinesis. The result of calling {@link #generate(KinesisAsyncClient)}
  * will depend on {@link StartingPoint} provided.
+ *
+ * <p>TODO: refactor - it repeats {@link DynamicCheckpointGenerator} but with {@link
+ * KinesisAsyncClient}
  */
-class FromScratchCheckpointGenerator implements CheckpointGenerator {
+class EFOFromScratchCheckpointGenerator implements EFOCheckpointGenerator {
 
-  private static final Logger LOG = LoggerFactory.getLogger(FromScratchCheckpointGenerator.class);
+  private static final Logger LOG =
+      LoggerFactory.getLogger(EFOFromScratchCheckpointGenerator.class);
   private final KinesisIO.Read readSpec;
 
-  FromScratchCheckpointGenerator(KinesisIO.Read readSpec) {
+  EFOFromScratchCheckpointGenerator(KinesisIO.Read readSpec) {
     this.readSpec = readSpec;
   }
 
