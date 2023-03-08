@@ -33,8 +33,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
-
-import avro.shaded.com.google.common.base.Objects;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import software.amazon.awssdk.core.async.SdkPublisher;
@@ -83,7 +81,11 @@ class EFOStubbedKinesisAsyncClient implements KinesisAsyncClient {
     subscribeRequestsSeen.add(req);
     Deque<StubbedSdkPublisher> publishers =
         checkNotNull(stubbedPublishers.get(req.shardId()), "Not stubbed");
-    StubbedSdkPublisher publisher = Objects.firstNonNull(publishers.poll(), new NoopSdkPublisher());
+
+    StubbedSdkPublisher publisher = publishers.poll();
+    if (publisher == null) {
+      publisher = new NoopSdkPublisher();
+    }
     resp.onEventStream(publisher);
     return publisher.result;
   }
