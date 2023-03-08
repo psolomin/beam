@@ -144,6 +144,47 @@ public class EFOShardSubscribersPoolTest {
   }
 
   @Test
+  public void doesNotIntroduceDuplicatesWithAggregatedRecordsCheckpoints() throws Exception {
+    kinesis = new EFOStubbedKinesisAsyncClient(10, ImmutableList.of("shard-000"));
+    kinesis.stubSubscribeToShard("shard-000", eventWithAggRecords(12, 6));
+
+    KinesisReaderCheckpoint initialCheckpoint =
+        new EFOFromScratchCheckpointGenerator(readSpec).generate(kinesis);
+
+    pool = new EFOShardSubscribersPool(readSpec, kinesis);
+    pool.start(initialCheckpoint);
+    List<KinesisRecord> actualRecords = waitForRecords(pool, 4);
+    validateRecords(
+        actualRecords, 4, new String[] {"12", "12", "12", "12"}, new Long[] {0L, 1L, 2L, 3L});
+    KinesisReaderCheckpoint checkpoint = pool.getCheckpointMark();
+    assertThat(checkpoint.iterator())
+        .containsExactlyInAnyOrder(
+            new ShardCheckpoint(
+                "stream-01", "shard-000", ShardIteratorType.AT_SEQUENCE_NUMBER, "12", 3L));
+    pool.stop();
+    kinesis.close();
+
+    kinesis = new EFOStubbedKinesisAsyncClient(10, ImmutableList.of("shard-000"));
+    // simulate re-consuming same content again
+    kinesis.stubSubscribeToShard("shard-000", eventWithAggRecords(12, 6));
+
+    pool = new EFOShardSubscribersPool(readSpec, kinesis);
+    pool.start(checkpoint);
+    // need to poll more, such that records are consumed and skipped
+    List<KinesisRecord> recordsAfterReStart = waitForRecords(pool, 2 + 5);
+    validateRecords(
+        recordsAfterReStart,
+        2,
+        new String[] {"12", "12"},
+        new Long[] {4L, 5L} // 0L, 1L, 2L, 3L were consumed and checkpoint-ed before
+        );
+    assertThat(pool.getCheckpointMark().iterator())
+        .containsExactlyInAnyOrder(
+            new ShardCheckpoint(
+                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "12", 0L));
+  }
+
+  @Test
   public void poolReSubscribesWhenNoRecordsCome() throws Exception {
     kinesis = new EFOStubbedKinesisAsyncClient(10, ImmutableList.of("shard-000", "shard-001"));
     kinesis.stubSubscribeToShard("shard-000", eventsWithoutRecords(3, 31));
@@ -509,6 +550,25 @@ public class EFOShardSubscribersPoolTest {
             new RecordDataToCheck("shard-001", "5"),
             new RecordDataToCheck("shard-001", "6"),
             new RecordDataToCheck("shard-001", "7"));
+  }
+
+  private void validateRecords(
+      List<KinesisRecord> records,
+      int expectedCnt,
+      String[] expectedSequenceNumbers,
+      Long[] expectedSubSequenceNumbers) {
+
+    List<String> sequenceNumbers =
+        records.stream().map(KinesisRecord::getSequenceNumber).collect(Collectors.toList());
+    List<Long> subSequenceNumbers =
+        records.stream().map(KinesisRecord::getSubSequenceNumber).collect(Collectors.toList());
+
+    assertThat(sequenceNumbers)
+        .hasSize(expectedCnt)
+        .containsExactlyInAnyOrder(expectedSequenceNumbers);
+    assertThat(subSequenceNumbers)
+        .hasSize(expectedCnt)
+        .containsExactlyInAnyOrder(expectedSubSequenceNumbers);
   }
 
   private static ByteBuffer fromStr(String str) {

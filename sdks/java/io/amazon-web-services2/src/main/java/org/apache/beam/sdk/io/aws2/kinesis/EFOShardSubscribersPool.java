@@ -197,7 +197,12 @@ class EFOShardSubscribersPool {
         ShardState shardState = Preconditions.checkStateNotNull(state.get(shardId));
         if (current.hasNext()) {
           KinesisClientRecord r = current.next();
-          shardState.update(r);
+          if (!shardState.recordWasAlreadyConsumed(r)) {
+            KinesisRecord kinesisRecord = new KinesisRecord(r, read.getStreamName(), shardId);
+            shardState.update(r);
+            latestRecordTimestampPolicy.update(kinesisRecord);
+            return kinesisRecord;
+          }
           // Make sure to update shard state accordingly if `current` does not contain any more
           // events. This is necessary to account for any re-sharding, so we could correctly resume
           // from a checkpoint if taken once we advanced to the record returned by getNextRecord().
@@ -205,9 +210,6 @@ class EFOShardSubscribersPool {
             onEventDone(shardState, current);
             current = null;
           }
-          KinesisRecord kinesisRecord = new KinesisRecord(r, read.getStreamName(), shardId);
-          latestRecordTimestampPolicy.update(kinesisRecord);
-          return kinesisRecord;
         } else {
           onEventDone(shardState, current);
           current = null;
@@ -362,17 +364,31 @@ class EFOShardSubscribersPool {
 
     ShardCheckpoint toCheckpoint() {
       if (sequenceNumber != null) {
-        return new ShardCheckpoint(
-            initCheckpoint.getStreamName(),
-            initCheckpoint.getShardId(),
-            ShardIteratorType.AFTER_SEQUENCE_NUMBER,
-            sequenceNumber,
-            subSequenceNumber);
+        if (subSequenceNumber != 0L) {
+          return new ShardCheckpoint(
+              initCheckpoint.getStreamName(),
+              initCheckpoint.getShardId(),
+              ShardIteratorType.AT_SEQUENCE_NUMBER,
+              sequenceNumber,
+              subSequenceNumber);
+        } else {
+          return new ShardCheckpoint(
+              initCheckpoint.getStreamName(),
+              initCheckpoint.getShardId(),
+              ShardIteratorType.AFTER_SEQUENCE_NUMBER,
+              sequenceNumber,
+              subSequenceNumber);
+        }
       } else {
         // sequenceNumber was never updated for this shard,
         // fall back to its init checkpoint
         return initCheckpoint;
       }
+    }
+
+    boolean recordWasAlreadyConsumed(KinesisClientRecord r) {
+      Long initSubSequenceNumber = initCheckpoint.getSubSequenceNumber();
+      return initSubSequenceNumber != null && initSubSequenceNumber >= r.subSequenceNumber();
     }
   }
 
