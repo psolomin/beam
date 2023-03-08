@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.Record;
@@ -73,6 +74,14 @@ class EFORecordsGenerators {
         .continuationSequenceNumber(null)
         .childShards(childShards)
         .build();
+  }
+
+  static SubscribeToShardEvent[] eventsWithRecords(int startSeqNumber, int numRecords) {
+    List<SubscribeToShardEvent> events = new ArrayList<>();
+    for (int i = startSeqNumber; i < startSeqNumber + numRecords; i++) {
+      events.add(eventWithRecords(ImmutableList.of(createRecord(i))));
+    }
+    return events.toArray(new SubscribeToShardEvent[0]);
   }
 
   static SubscribeToShardEvent eventWithRecords(int startSeqNumber, int numRecords) {

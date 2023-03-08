@@ -145,12 +145,13 @@ class EFOShardSubscriber {
             String lastContinuationSequenceNumber = eventsSubscriber.sequenceNumber;
             if (inFlight.get() == IN_FLIGHT_LIMIT) {
               state = PAUSED;
-            }
-            if (lastContinuationSequenceNumber != null) {
-              pool.delayedTask(
-                  () -> internalReSubscribe(lastContinuationSequenceNumber), onErrorCoolDownMs);
             } else {
-              pool.delayedTask(() -> internalSubscribe(initialPosition), onErrorCoolDownMs);
+              if (lastContinuationSequenceNumber != null) {
+                pool.delayedTask(
+                    () -> internalReSubscribe(lastContinuationSequenceNumber), onErrorCoolDownMs);
+              } else {
+                pool.delayedTask(() -> internalSubscribe(initialPosition), onErrorCoolDownMs);
+              }
             }
             return;
           }
