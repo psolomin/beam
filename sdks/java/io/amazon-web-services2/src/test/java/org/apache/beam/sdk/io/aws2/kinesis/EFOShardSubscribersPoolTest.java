@@ -270,6 +270,36 @@ public class EFOShardSubscribersPoolTest {
   }
 
   @Test
+  public void poolReSubscribesFromInitialWhenRecoverableErrorOccursImmediately() throws Exception {
+    kinesis = new EFOStubbedKinesisAsyncClient(10, ImmutableList.of("shard-000"));
+    kinesis.stubSubscribeToShard("shard-000").failWith(new ReadTimeoutException());
+    kinesis.stubSubscribeToShard("shard-000", eventWithRecords(550, 3));
+    kinesis.stubSubscribeToShard("shard-000", eventsWithoutRecords(1, 553));
+
+    KinesisReaderCheckpoint initialCheckpoint =
+        new EFOFromScratchCheckpointGenerator(readSpec).generate(kinesis);
+
+    pool = new EFOShardSubscribersPool(readSpec, kinesis, 1);
+    pool.start(initialCheckpoint);
+
+    assertThat(waitForRecords(pool, 3)).hasSize(3);
+    assertThat(waitForRecords(pool, 1)).isEmpty(); // no more records
+    assertThat(kinesis.listRequestsSeen()).containsExactlyInAnyOrder(listLatest());
+
+    assertThat(kinesis.subscribeRequestsSeen())
+        .containsExactlyInAnyOrder(
+            subscribeLatest("shard-000"),
+            subscribeLatest("shard-000"),
+            subscribeAfterSeqNumber("shard-000", "552"),
+            subscribeAfterSeqNumber("shard-000", "553"));
+
+    assertThat(pool.getCheckpointMark().iterator())
+        .containsExactlyInAnyOrder(
+            new ShardCheckpoint(
+                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "553", 0L));
+  }
+
+  @Test
   public void poolFailsWhenNonRecoverableErrorOccurs() throws Exception {
     kinesis = new EFOStubbedKinesisAsyncClient(10, ImmutableList.of("shard-000", "shard-001"));
     kinesis.stubSubscribeToShard("shard-000", eventWithRecords(7));

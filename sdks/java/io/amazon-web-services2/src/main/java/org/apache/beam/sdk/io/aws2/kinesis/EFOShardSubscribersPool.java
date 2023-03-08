@@ -177,6 +177,11 @@ class EFOShardSubscribersPool {
    *       triggering {@link #onEventDone} if that was the last record of {@link #current}.
    *   <li>Finally, if nothing was returned yet, trigger {@link #onEventDone} and continue loop.
    * </ol>
+   *
+   * <p>It polls the {@link #eventQueue} in a while loop to avoid returning null immediately if an
+   * event without records arrived. There may be events with records after the {@link #current}, and
+   * it is better to poll again instead of having {@link KinesisReader#advance()} signalling false
+   * to Beam. Otherwise, Beam would poll again later, which would introduce unnecessary delay.
    */
   @Nullable
   KinesisRecord getNextRecord() throws IOException {
