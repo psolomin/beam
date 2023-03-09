@@ -202,8 +202,8 @@ class EFOShardSubscribersPool {
         ShardState shardState = Preconditions.checkStateNotNull(state.get(shardId));
         if (current.hasNext()) {
           KinesisClientRecord r = current.next();
-          if (!shardState.recordWasAlreadyConsumed(r)) {
-            KinesisRecord kinesisRecord = new KinesisRecord(r, read.getStreamName(), shardId);
+          KinesisRecord kinesisRecord = new KinesisRecord(r, read.getStreamName(), shardId);
+          if (shardState.recordWasNotCheckPointedYet(kinesisRecord)) {
             shardState.update(r);
             latestRecordTimestampPolicy.update(kinesisRecord);
             return kinesisRecord;
@@ -391,9 +391,8 @@ class EFOShardSubscribersPool {
       }
     }
 
-    boolean recordWasAlreadyConsumed(KinesisClientRecord r) {
-      Long initSubSequenceNumber = initCheckpoint.getSubSequenceNumber();
-      return initSubSequenceNumber != null && initSubSequenceNumber >= r.subSequenceNumber();
+    boolean recordWasNotCheckPointedYet(KinesisRecord r) {
+      return initCheckpoint.isBeforeOrAt(r);
     }
   }
 

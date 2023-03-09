@@ -212,14 +212,21 @@ public class EFOShardSubscribersPoolTest {
 
     pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(checkpoint);
-    // need to poll more, such that records are consumed and skipped
-    List<KinesisRecord> recordsAfterReStart = waitForRecords(pool, 2 + 5);
+    List<KinesisRecord> recordsAfterReStart = waitForRecords(pool, 3);
+
+    // FIXME: Check ShardCheckpoint#isBeforeOrAt() semantic!
     validateRecords(
         recordsAfterReStart,
-        2,
-        new String[] {"12", "12"},
-        new Long[] {4L, 5L} // 0L, 1L, 2L, 3L were consumed and checkpoint-ed before
+        3,
+        new String[] {"12", "12", "12"},
+        new Long[] {3L, 4L, 5L} // 0L, 1L, 2L, 3L were consumed and checkpoint-ed before
         );
+    assertThat(pool.getCheckpointMark().iterator())
+        .containsExactlyInAnyOrder(
+            new ShardCheckpoint(
+                "stream-01", "shard-000", ShardIteratorType.AT_SEQUENCE_NUMBER, "12", 5L));
+
+    assertThat(waitForRecords(pool, 3).size()).isEqualTo(0);
     assertThat(pool.getCheckpointMark().iterator())
         .containsExactlyInAnyOrder(
             new ShardCheckpoint(

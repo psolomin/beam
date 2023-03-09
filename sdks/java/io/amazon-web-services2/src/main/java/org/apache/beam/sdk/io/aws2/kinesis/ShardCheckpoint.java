@@ -25,7 +25,6 @@ import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AT
 
 import java.io.Serializable;
 import java.util.Objects;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joda.time.Instant;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
@@ -179,10 +178,6 @@ class ShardCheckpoint implements Serializable {
 
   public String getShardId() {
     return shardId;
-  }
-
-  public @Nullable Long getSubSequenceNumber() {
-    return subSequenceNumber;
   }
 
   StartingPosition toStartingPosition() {
