@@ -314,11 +314,14 @@ public class EFOShardSubscribersPoolTest {
   @Test
   public void poolReSubscribesWhenManyRecoverableErrorsOccur() throws Exception {
     kinesis = new EFOStubbedKinesisAsyncClient(1, ImmutableList.of("shard-000", "shard-001"));
-    kinesis
-        .stubSubscribeToShard("shard-000", eventsWithRecords(501, 250))
-        .failWith(new ReadTimeoutException());
 
-    kinesis.stubSubscribeToShard("shard-000", eventsWithoutRecords(3, 750));
+    for (int i = 0; i < 250; i++) {
+      kinesis
+          .stubSubscribeToShard("shard-000", eventsWithRecords(i, 1))
+          .failWith(new ReadTimeoutException());
+    }
+
+    kinesis.stubSubscribeToShard("shard-000", eventsWithoutRecords(3, 250));
 
     kinesis
         .stubSubscribeToShard("shard-001", eventsWithRecords(333, 250))
@@ -335,19 +338,12 @@ public class EFOShardSubscribersPoolTest {
     assertThat(waitForRecords(pool, 500)).hasSize(500);
     assertThat(waitForRecords(pool, 50)).hasSize(0); // nothing else comes
     assertThat(kinesis.listRequestsSeen()).containsExactlyInAnyOrder(listLatest());
-    assertThat(kinesis.subscribeRequestsSeen())
-        .containsExactlyInAnyOrder(
-            subscribeLatest("shard-000"),
-            subscribeLatest("shard-001"),
-            subscribeAfterSeqNumber("shard-000", "750"),
-            subscribeAfterSeqNumber("shard-001", "582"),
-            subscribeAfterSeqNumber("shard-000", "752"),
-            subscribeAfterSeqNumber("shard-001", "585"));
+    assertThat(kinesis.subscribeRequestsSeen().size()).isEqualTo(255);
 
     assertThat(pool.getCheckpointMark().iterator())
         .containsExactlyInAnyOrder(
             new ShardCheckpoint(
-                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "752", 0L),
+                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "252", 0L),
             new ShardCheckpoint(
                 "stream-01", "shard-001", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "585", 0L));
   }
