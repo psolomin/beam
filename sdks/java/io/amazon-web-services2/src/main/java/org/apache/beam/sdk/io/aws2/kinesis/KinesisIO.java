@@ -589,15 +589,8 @@ public final class KinesisIO {
         ClientBuilderFactory.validate(awsOptions, getClientConfiguration());
       }
 
-      Unbounded<KinesisRecord> unbounded;
-
-      if (getConsumerArn() == null) {
-        unbounded = org.apache.beam.sdk.io.Read.from(new KinesisSource(this));
-      } else {
-        AwsOptions awsOptions = input.getPipeline().getOptions().as(AwsOptions.class);
-        ClientBuilderFactory builderFactory = ClientBuilderFactory.getFactory(awsOptions);
-        unbounded = org.apache.beam.sdk.io.Read.from(new EFOKinesisSource(this, builderFactory));
-      }
+      Unbounded<KinesisRecord> unbounded =
+          org.apache.beam.sdk.io.Read.from(new KinesisSource(this));
 
       PTransform<PBegin, PCollection<KinesisRecord>> transform = unbounded;
 

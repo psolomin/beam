@@ -35,8 +35,8 @@ class EFOKinesisReader extends UnboundedSource.UnboundedReader<KinesisRecord> {
 
   private final KinesisIO.Read spec;
   private final KinesisAsyncClient kinesis;
-  private final EFOKinesisSource source;
-  private final EFOCheckpointGenerator checkpointGenerator;
+  private final KinesisSource source;
+  private final CheckpointGenerator checkpointGenerator;
 
   private @Nullable KinesisRecord currentRecord = null;
   private @Nullable EFOShardSubscribersPool shardSubscribersPool = null;
@@ -44,8 +44,8 @@ class EFOKinesisReader extends UnboundedSource.UnboundedReader<KinesisRecord> {
   EFOKinesisReader(
       KinesisIO.Read spec,
       KinesisAsyncClient kinesis,
-      EFOCheckpointGenerator checkpointGenerator,
-      EFOKinesisSource source) {
+      CheckpointGenerator checkpointGenerator,
+      KinesisSource source) {
     this.spec = checkArgumentNotNull(spec);
     this.kinesis = checkArgumentNotNull(kinesis);
     this.checkpointGenerator = checkArgumentNotNull(checkpointGenerator);

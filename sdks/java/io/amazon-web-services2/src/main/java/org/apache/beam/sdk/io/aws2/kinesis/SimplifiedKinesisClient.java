@@ -29,6 +29,7 @@ import org.apache.beam.sdk.util.BackOffUtils;
 import org.apache.beam.sdk.util.FluentBackoff;
 import org.apache.beam.sdk.util.Sleeper;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.joda.time.Minutes;
@@ -86,7 +87,7 @@ class SimplifiedKinesisClient implements AutoCloseable {
   SimplifiedKinesisClient(
       Supplier<KinesisClient> kinesisSupplier,
       Supplier<CloudWatchClient> cloudWatchSupplier,
-      Integer limit) {
+      @Nullable Integer limit) {
     this.kinesis = new LazyResource<>(checkNotNull(kinesisSupplier, "kinesis"));
     this.cloudWatch = new LazyResource<>(checkNotNull(cloudWatchSupplier, "cloudWatch"));
     this.limit = limit;

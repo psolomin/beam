@@ -24,51 +24,57 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
+import org.apache.beam.sdk.util.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
+import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
 
-/**
- * Creates {@link KinesisReaderCheckpoint} when stored checkpoint is not available or outdated. List
- * of shards is obtained from Kinesis. The result of calling {@link #generate(KinesisAsyncClient)}
- * will depend on {@link StartingPoint} provided.
- *
- * <p>TODO: refactor - it repeats {@link DynamicCheckpointGenerator} but with {@link
- * KinesisAsyncClient}
- */
-class EFOFromScratchCheckpointGenerator implements EFOCheckpointGenerator {
-
-  private static final Logger LOG =
-      LoggerFactory.getLogger(EFOFromScratchCheckpointGenerator.class);
-  private final KinesisIO.Read readSpec;
-
-  EFOFromScratchCheckpointGenerator(KinesisIO.Read readSpec) {
-    this.readSpec = readSpec;
-  }
-
-  @Override
-  public KinesisReaderCheckpoint generate(KinesisAsyncClient kinesis)
-      throws TransientKinesisException {
-    List<ShardCheckpoint> streamShards = generateShardsCheckpoints(readSpec, kinesis);
-
-    LOG.info(
-        "Creating a checkpoint with following shards {} at {}",
-        streamShards,
-        readSpec.getInitialPosition());
-    return new KinesisReaderCheckpoint(streamShards);
-  }
-
-  @Override
-  public String toString() {
-    return String.format(
-        "Checkpoint generator for %s: %s", readSpec.getStreamName(), readSpec.getInitialPosition());
-  }
-
+class ShardListingCheckpointGenerator implements CheckpointGenerator {
+  private static final Logger LOG = LoggerFactory.getLogger(ShardListingCheckpointGenerator.class);
   private static final int shardListingTimeoutMs = 10_000;
+
+  private final KinesisIO.Read spec;
+
+  public ShardListingCheckpointGenerator(KinesisIO.Read spec) {
+    this.spec = spec;
+  }
+
+  @Override
+  public <ClientT> KinesisReaderCheckpoint generate(ClientT client)
+      throws TransientKinesisException {
+    StartingPoint startingPoint = spec.getInitialPosition();
+
+    if (client instanceof SimplifiedKinesisClient) {
+      SimplifiedKinesisClient kinesis = (SimplifiedKinesisClient) client;
+      List<Shard> streamShards =
+          kinesis.listShardsAtPoint(
+              Preconditions.checkArgumentNotNull(spec.getStreamName()),
+              Preconditions.checkArgumentNotNull(startingPoint));
+
+      LOG.info("Creating a checkpoint with following shards {} at {}", streamShards, startingPoint);
+      return new KinesisReaderCheckpoint(
+          streamShards.stream()
+              .map(
+                  shard ->
+                      new ShardCheckpoint(
+                          Preconditions.checkArgumentNotNull(spec.getStreamName()),
+                          shard.shardId(),
+                          Preconditions.checkArgumentNotNull(startingPoint)))
+              .collect(Collectors.toList()));
+    } else if (client instanceof KinesisAsyncClient) {
+      KinesisAsyncClient kinesis = (KinesisAsyncClient) client;
+      List<ShardCheckpoint> streamShards = generateShardsCheckpoints(spec, kinesis);
+      LOG.info("Creating a checkpoint with following shards {} at {}", streamShards, startingPoint);
+      return new KinesisReaderCheckpoint(streamShards);
+    } else {
+      throw new IllegalStateException(String.format("Unknown type of client %s", client));
+    }
+  }
 
   private static List<ShardCheckpoint> generateShardsCheckpoints(
       KinesisIO.Read readSpec, KinesisAsyncClient kinesis) {

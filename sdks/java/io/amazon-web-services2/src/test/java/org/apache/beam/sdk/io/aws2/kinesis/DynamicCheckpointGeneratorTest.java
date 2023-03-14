@@ -47,11 +47,14 @@ public class DynamicCheckpointGeneratorTest {
   @Test
   public void shouldMapAllShardsToCheckpoints() throws Exception {
     List<Shard> shards = ImmutableList.of(shard1, shard2, shard3);
+    KinesisIO.Read readSpec =
+        KinesisIO.read()
+            .withStreamName("stream")
+            .withInitialPositionInStream(InitialPositionInStream.LATEST);
     String streamName = "stream";
     StartingPoint startingPoint = new StartingPoint(InitialPositionInStream.LATEST);
     when(kinesisClient.listShardsAtPoint(streamName, startingPoint)).thenReturn(shards);
-    DynamicCheckpointGenerator underTest =
-        new DynamicCheckpointGenerator(streamName, startingPoint);
+    ShardListingCheckpointGenerator underTest = new ShardListingCheckpointGenerator(readSpec);
 
     KinesisReaderCheckpoint checkpoint = underTest.generate(kinesisClient);
 

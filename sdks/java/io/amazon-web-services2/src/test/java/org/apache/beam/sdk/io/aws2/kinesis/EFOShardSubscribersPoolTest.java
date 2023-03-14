@@ -79,7 +79,7 @@ public class EFOShardSubscribersPoolTest {
     kinesis.stubSubscribeToShard("shard-001", eventsWithoutRecords(3, 8));
 
     KinesisReaderCheckpoint initialCheckpoint =
-        new EFOFromScratchCheckpointGenerator(readSpec).generate(kinesis);
+        new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
     pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);
@@ -123,7 +123,7 @@ public class EFOShardSubscribersPoolTest {
     kinesis.stubSubscribeToShard("shard-001", eventsWithoutRecords(3, 275));
 
     KinesisReaderCheckpoint initialCheckpoint =
-        new EFOFromScratchCheckpointGenerator(readSpec).generate(kinesis);
+        new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
     pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);
@@ -158,7 +158,7 @@ public class EFOShardSubscribersPoolTest {
     kinesis.stubSubscribeToShard("shard-001", eventsWithoutRecords(1, 56));
 
     KinesisReaderCheckpoint initialCheckpoint =
-        new EFOFromScratchCheckpointGenerator(readSpec).generate(kinesis);
+        new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
     pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);
@@ -191,7 +191,7 @@ public class EFOShardSubscribersPoolTest {
     kinesis.stubSubscribeToShard("shard-000", eventWithAggRecords(12, 6));
 
     KinesisReaderCheckpoint initialCheckpoint =
-        new EFOFromScratchCheckpointGenerator(readSpec).generate(kinesis);
+        new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
     pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);
@@ -240,7 +240,7 @@ public class EFOShardSubscribersPoolTest {
     kinesis.stubSubscribeToShard("shard-001", eventsWithoutRecords(3, 8));
 
     KinesisReaderCheckpoint initialCheckpoint =
-        new EFOFromScratchCheckpointGenerator(readSpec).generate(kinesis);
+        new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
     pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);
@@ -282,7 +282,7 @@ public class EFOShardSubscribersPoolTest {
     kinesis.stubSubscribeToShard("shard-001", eventsWithoutRecords(3, 8));
 
     KinesisReaderCheckpoint initialCheckpoint =
-        new EFOFromScratchCheckpointGenerator(readSpec).generate(kinesis);
+        new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
     pool = new EFOShardSubscribersPool(readSpec, kinesis, 1);
     pool.start(initialCheckpoint);
@@ -337,7 +337,7 @@ public class EFOShardSubscribersPoolTest {
     kinesis.stubSubscribeToShard("shard-001", eventsWithoutRecords(3, 583));
 
     KinesisReaderCheckpoint initialCheckpoint =
-        new EFOFromScratchCheckpointGenerator(readSpec).generate(kinesis);
+        new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
     pool = new EFOShardSubscribersPool(readSpec, kinesis, 1);
     pool.start(initialCheckpoint);
@@ -363,7 +363,7 @@ public class EFOShardSubscribersPoolTest {
     kinesis.stubSubscribeToShard("shard-000", eventsWithoutRecords(1, 553));
 
     KinesisReaderCheckpoint initialCheckpoint =
-        new EFOFromScratchCheckpointGenerator(readSpec).generate(kinesis);
+        new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
     pool = new EFOShardSubscribersPool(readSpec, kinesis, 1);
     pool.start(initialCheckpoint);
@@ -399,7 +399,7 @@ public class EFOShardSubscribersPoolTest {
     kinesis.stubSubscribeToShard("shard-001", eventsWithoutRecords(3, 8));
 
     KinesisReaderCheckpoint initialCheckpoint =
-        new EFOFromScratchCheckpointGenerator(readSpec).generate(kinesis);
+        new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
     pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);
@@ -446,7 +446,7 @@ public class EFOShardSubscribersPoolTest {
     kinesis.stubSubscribeToShard("shard-001", eventsWithoutRecords(3, 8));
 
     KinesisReaderCheckpoint initialCheckpoint =
-        new EFOFromScratchCheckpointGenerator(readSpec).generate(kinesis);
+        new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
     pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);
@@ -488,7 +488,7 @@ public class EFOShardSubscribersPoolTest {
     kinesis.stubSubscribeToShard("shard-004", eventsWithoutRecords(2, 5));
 
     KinesisReaderCheckpoint initialCheckpoint =
-        new EFOFromScratchCheckpointGenerator(readSpec).generate(kinesis);
+        new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
     pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);
@@ -564,7 +564,7 @@ public class EFOShardSubscribersPoolTest {
     kinesis.stubSubscribeToShard("shard-005", eventsWithoutRecords(3, 6));
 
     KinesisReaderCheckpoint initialCheckpoint =
-        new EFOFromScratchCheckpointGenerator(readSpec).generate(kinesis);
+        new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
     pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);
@@ -608,7 +608,7 @@ public class EFOShardSubscribersPoolTest {
     kinesis.stubSubscribeToShard("shard-000", eventWithRecords(1));
     kinesis.stubSubscribeToShard("shard-001", eventWithRecords(1));
     KinesisReaderCheckpoint initialCheckpoint =
-        new EFOFromScratchCheckpointGenerator(readSpec).generate(kinesis);
+        new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
     pool = new EFOShardSubscribersPool(readSpec, kinesis);
     pool.start(initialCheckpoint);

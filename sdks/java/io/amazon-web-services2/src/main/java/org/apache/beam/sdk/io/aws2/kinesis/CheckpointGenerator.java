@@ -24,6 +24,5 @@ import java.io.Serializable;
  * implementing class.
  */
 interface CheckpointGenerator extends Serializable {
-
-  KinesisReaderCheckpoint generate(SimplifiedKinesisClient client) throws TransientKinesisException;
+  <ClientT> KinesisReaderCheckpoint generate(ClientT client) throws TransientKinesisException;
 }
