@@ -375,9 +375,7 @@ public final class KinesisIO {
      * <p>Setting this means the {@link KinesisIO.Read} will use {@link KinesisAsyncClient} API for
      * all operations.
      *
-     * <p>{@link KinesisIO.Read} with and without EFO rely on the same mechanisms for keeping track
-     * of consumer's progress. Stopping a non-EFO consumer, switching it to EFO and back <b>does
-     * not</b> cause state incompatibility of {@link KinesisIO.Read}.
+     * <p><b>TODO: add note on state and switch on / off</b>.
      *
      * <p>It is recommended to adjust runner's settings to prevent it from re-starting a EFO
      * consumer faster than once per ~ 10 seconds. Internal calls to {@link
