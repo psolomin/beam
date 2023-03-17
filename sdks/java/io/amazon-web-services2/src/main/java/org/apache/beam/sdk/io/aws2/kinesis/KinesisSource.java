@@ -31,6 +31,8 @@ import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.io.aws2.common.ClientBuilderFactory;
 import org.apache.beam.sdk.io.aws2.common.ClientConfiguration;
 import org.apache.beam.sdk.io.aws2.options.AwsOptions;
+import org.apache.beam.sdk.io.aws2.options.KinesisSourceOptions;
+import org.apache.beam.sdk.io.aws2.options.KinesisSourceToConsumerMapping;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.util.Preconditions;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -60,6 +62,14 @@ public class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderC
 
   @Override
   public List<KinesisSource> split(int desiredNumSplits, PipelineOptions options) throws Exception {
+    String streamName = Preconditions.checkArgumentNotNull(spec.getStreamName());
+    KinesisSourceOptions sourcePipelineOptions = options.as(KinesisSourceOptions.class);
+    KinesisSourceToConsumerMapping streamToArnMapping =
+        sourcePipelineOptions.getKinesisSourceToConsumerMapping();
+    LOG.info(
+        "Split : Found consumer ARN = {} for stream {}",
+        streamToArnMapping.getConsumerArnForStream(streamName),
+        streamName);
     List<KinesisSource> sources = newArrayList();
     if (spec.getConsumerArn() == null) {
       try (SimplifiedKinesisClient client = createClient(options)) {
@@ -85,6 +95,15 @@ public class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderC
   public UnboundedReader<KinesisRecord> createReader(
       PipelineOptions options, @Nullable KinesisReaderCheckpoint checkpointMark)
       throws IOException {
+    KinesisSourceOptions sourcePipelineOptions = options.as(KinesisSourceOptions.class);
+    KinesisSourceToConsumerMapping streamToArnMapping =
+        sourcePipelineOptions.getKinesisSourceToConsumerMapping();
+    String streamName = Preconditions.checkArgumentNotNull(spec.getStreamName());
+
+    LOG.info(
+        "Create reader : Found consumer ARN = {} for stream {}",
+        streamToArnMapping.getConsumerArnForStream(streamName),
+        streamName);
     CheckpointGenerator checkpointGenerator = this.checkpointGenerator;
     if (checkpointMark != null) {
       checkpointGenerator = new StaticCheckpointGenerator(checkpointMark);
