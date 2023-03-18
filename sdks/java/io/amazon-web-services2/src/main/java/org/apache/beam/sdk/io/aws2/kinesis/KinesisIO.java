@@ -167,7 +167,7 @@ import software.amazon.kinesis.common.InitialPositionInStream;
  * }}</pre>
  *
  * <p>EFO can be enabled / disabled any time without loosing consumer's positions in shards which
- * were already checkpoint-ed.
+ * were already checkpoint-ed. Consumer ARN for a given stream can be changed any time, too.
  *
  * <p>It is recommended to adjust runner's settings to prevent it from re-starting a EFO consumer(s)
  * faster than once per ~ 10 seconds. Internal calls to {@link

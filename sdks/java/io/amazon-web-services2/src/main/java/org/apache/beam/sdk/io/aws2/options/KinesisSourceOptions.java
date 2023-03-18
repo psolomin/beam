@@ -41,6 +41,22 @@ import org.apache.beam.sdk.options.Default;
 import org.apache.beam.sdk.options.Description;
 import org.apache.beam.sdk.options.PipelineOptions;
 
+/**
+ * Allows passing modify-able options for {@link org.apache.beam.sdk.io.aws2.kinesis.KinesisSource}.
+ *
+ * <p>{@link org.apache.beam.sdk.io.aws2.kinesis.KinesisIO.Read} is serialized with the entire
+ * Source object (at least in Flink runner) which was a trouble for EFO feature design.
+ *
+ * <p>If consumer ARN is part of KinesisIO.Read object, when started from a Flink savepoint,
+ * consumer ARN string or null value would be forced from the savepoint. Consequences of this are:
+ *
+ * <ol>
+ *   <li>Once a Kinesis source is started, its consumer ARN can't be changed without loosing state
+ *       (checkpoint-ed shard progress).
+ *   <li>Kinesis source can not have seamless enabling / disabling of EFO feature without loosing
+ *       state (checkpoint-ed shard progress).
+ * </ol>
+ */
 @Experimental(Kind.SOURCE_SINK)
 public interface KinesisSourceOptions extends PipelineOptions {
   /**
