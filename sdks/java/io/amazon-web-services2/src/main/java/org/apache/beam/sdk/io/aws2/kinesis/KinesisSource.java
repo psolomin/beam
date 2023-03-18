@@ -63,15 +63,9 @@ public class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderC
   @Override
   public List<KinesisSource> split(int desiredNumSplits, PipelineOptions options) throws Exception {
     String streamName = Preconditions.checkArgumentNotNull(spec.getStreamName());
-    KinesisSourceOptions sourcePipelineOptions = options.as(KinesisSourceOptions.class);
-    KinesisSourceToConsumerMapping streamToArnMapping =
-        sourcePipelineOptions.getKinesisSourceToConsumerMapping();
-    LOG.info(
-        "Split : Found consumer ARN = {} for stream {}",
-        streamToArnMapping.getConsumerArnForStream(streamName),
-        streamName);
+    String consumerArn = maybeResolveConsumerArn(options, streamName);
     List<KinesisSource> sources = newArrayList();
-    if (spec.getConsumerArn() == null) {
+    if (consumerArn == null) {
       try (SimplifiedKinesisClient client = createClient(options)) {
         KinesisReaderCheckpoint checkpoint = checkpointGenerator.generate(client);
 
@@ -95,27 +89,22 @@ public class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderC
   public UnboundedReader<KinesisRecord> createReader(
       PipelineOptions options, @Nullable KinesisReaderCheckpoint checkpointMark)
       throws IOException {
-    KinesisSourceOptions sourcePipelineOptions = options.as(KinesisSourceOptions.class);
-    KinesisSourceToConsumerMapping streamToArnMapping =
-        sourcePipelineOptions.getKinesisSourceToConsumerMapping();
-    String streamName = Preconditions.checkArgumentNotNull(spec.getStreamName());
-
-    LOG.info(
-        "Create reader : Found consumer ARN = {} for stream {}",
-        streamToArnMapping.getConsumerArnForStream(streamName),
-        streamName);
     CheckpointGenerator checkpointGenerator = this.checkpointGenerator;
     if (checkpointMark != null) {
       checkpointGenerator = new StaticCheckpointGenerator(checkpointMark);
     }
 
-    if (spec.getConsumerArn() == null) {
+    String streamName = Preconditions.checkArgumentNotNull(spec.getStreamName());
+    String consumerArn = maybeResolveConsumerArn(options, streamName);
+
+    if (consumerArn == null) {
       LOG.info("Creating new reader using {}", checkpointGenerator);
       return new KinesisReader(spec, createClient(options), checkpointGenerator, this);
     } else {
       LOG.info("Creating new EFO reader using {}", checkpointGenerator);
       KinesisSource source = new KinesisSource(spec);
-      return new EFOKinesisReader(spec, createAsyncClient(options), checkpointGenerator, source);
+      return new EFOKinesisReader(
+          spec, consumerArn, createAsyncClient(options), checkpointGenerator, source);
     }
   }
 
@@ -156,5 +145,12 @@ public class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderC
     return builderFactory
         .create(adjustedBuilder, checkArgumentNotNull(spec.getClientConfiguration()), awsOptions)
         .build();
+  }
+
+  private @Nullable String maybeResolveConsumerArn(PipelineOptions options, String streamName) {
+    KinesisSourceOptions sourcePipelineOptions = options.as(KinesisSourceOptions.class);
+    KinesisSourceToConsumerMapping streamToArnMapping =
+        sourcePipelineOptions.getKinesisSourceToConsumerMapping();
+    return streamToArnMapping.getConsumerArnForStream(streamName);
   }
 }

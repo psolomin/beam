@@ -67,6 +67,7 @@ class EFOShardSubscribersPool {
   private final UUID poolId;
 
   private final KinesisIO.Read read;
+  private final String consumerArn;
   private final KinesisAsyncClient kinesis;
 
   /**
@@ -121,17 +122,22 @@ class EFOShardSubscribersPool {
   private final WatermarkPolicy latestRecordTimestampPolicy =
       WatermarkPolicyFactory.withArrivalTimePolicy().createWatermarkPolicy();
 
-  EFOShardSubscribersPool(KinesisIO.Read readSpec, KinesisAsyncClient kinesis) {
+  EFOShardSubscribersPool(KinesisIO.Read readSpec, String consumerArn, KinesisAsyncClient kinesis) {
     this.poolId = UUID.randomUUID();
     this.read = readSpec;
+    this.consumerArn = consumerArn;
     this.kinesis = kinesis;
     this.onErrorCoolDownMs = ON_ERROR_COOL_DOWN_MS_DEFAULT;
   }
 
   EFOShardSubscribersPool(
-      KinesisIO.Read readSpec, KinesisAsyncClient kinesis, int onErrorCoolDownMs) {
+      KinesisIO.Read readSpec,
+      String consumerArn,
+      KinesisAsyncClient kinesis,
+      int onErrorCoolDownMs) {
     this.poolId = UUID.randomUUID();
     this.read = readSpec;
+    this.consumerArn = consumerArn;
     this.kinesis = kinesis;
     this.onErrorCoolDownMs = onErrorCoolDownMs;
   }
@@ -147,7 +153,7 @@ class EFOShardSubscribersPool {
         "Starting pool {} {} {}. Checkpoints = {}",
         poolId,
         read.getStreamName(),
-        read.getConsumerArn(),
+        consumerArn,
         checkpoints);
     for (ShardCheckpoint shardCheckpoint : checkpoints) {
       checkState(
@@ -267,7 +273,8 @@ class EFOShardSubscribersPool {
   @SuppressWarnings("FutureReturnValueIgnored")
   private EFOShardSubscriber initShardSubscriber(ShardCheckpoint cp) {
     EFOShardSubscriber subscriber =
-        new EFOShardSubscriber(this, cp.getShardId(), read, kinesis, onErrorCoolDownMs);
+        new EFOShardSubscriber(
+            this, cp.getShardId(), read, consumerArn, kinesis, onErrorCoolDownMs);
     StartingPosition startingPosition = cp.toStartingPosition();
     if (subscriptionError == null) {
       subscriber.subscribe(startingPosition).whenCompleteAsync(errorHandler);

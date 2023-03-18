@@ -158,15 +158,21 @@ import software.amazon.kinesis.common.InitialPositionInStream;
  * href="https://docs.aws.amazon.com/streams/latest/dev/enhanced-consumers.html">Consumers with
  * Dedicated Throughput</a>
  *
- * <p>To configure the IO with EFO enabled, add {@link KinesisIO.Read#withConsumerArn(String)}
- * config:
+ * <p>EFO can be enabled for one or more {@link KinesisIO.Read} instances via pipeline options:
  *
- * <pre>{@code
- * p.apply(KinesisIO.read()
- *    .withStreamName("streamName")
- *    .withInitialPositionInStream(InitialPositionInStream.LATEST)
- *    .withConsumerArn("arn:aws:kinesis:..."))
- * }</pre>
+ * <pre>{@code --kinesisSourceToConsumerMapping={
+ *   "stream-01": "arn:aws:kinesis:...:stream/stream-01/consumer/consumer-01:1678576714",
+ *   "stream-02": "arn:aws:kinesis:...:stream/stream-02/consumer/my-consumer:1679576982",
+ *   ...
+ * }}</pre>
+ *
+ * <p>EFO can be enabled / disabled any time without loosing consumer's positions in shards which
+ * were already checkpoint-ed.
+ *
+ * <p>It is recommended to adjust runner's settings to prevent it from re-starting a EFO consumer(s)
+ * faster than once per ~ 10 seconds. Internal calls to {@link
+ * KinesisAsyncClient#subscribeToShard(SubscribeToShardRequest, SubscribeToShardResponseHandler)}
+ * may throw ResourceInUseException otherwise, which will cause a crash loop.
  *
  * <p><b>NOTE:</b> When EFO is enabled, {@link RateLimitPolicy} does not apply. Depending on the
  * downstream processing performance, the EFO consumer will back-pressure internally. Otherwise, it
@@ -306,8 +312,6 @@ public final class KinesisIO {
 
     abstract @Nullable String getStreamName();
 
-    abstract @Nullable String getConsumerArn();
-
     abstract @Nullable StartingPoint getInitialPosition();
 
     abstract @Nullable ClientConfiguration getClientConfiguration();
@@ -335,8 +339,6 @@ public final class KinesisIO {
 
       abstract Builder setStreamName(String streamName);
 
-      abstract Builder setConsumerArn(String consumerArn);
-
       abstract Builder setInitialPosition(StartingPoint startingPoint);
 
       abstract Builder setClientConfiguration(ClientConfiguration config);
@@ -363,28 +365,6 @@ public final class KinesisIO {
     /** Specify reading from streamName. */
     public Read withStreamName(String streamName) {
       return toBuilder().setStreamName(streamName).build();
-    }
-
-    /**
-     * Specify reading with Enhanced Fan-Out (EFO) via registered consumer ARN.
-     *
-     * <p>More details can be found here: <a
-     * href="https://docs.aws.amazon.com/streams/latest/dev/enhanced-consumers.html">Consumers with
-     * Dedicated Throughput</a>
-     *
-     * <p>Setting this means the {@link KinesisIO.Read} will use {@link KinesisAsyncClient} API for
-     * all operations.
-     *
-     * <p><b>TODO: add note on state and switch on / off</b>.
-     *
-     * <p>It is recommended to adjust runner's settings to prevent it from re-starting a EFO
-     * consumer faster than once per ~ 10 seconds. Internal calls to {@link
-     * KinesisAsyncClient#subscribeToShard(SubscribeToShardRequest,
-     * SubscribeToShardResponseHandler)} may throw ResourceInUseException otherwise, which will
-     * cause a crash loop.
-     */
-    public Read withConsumerArn(String consumerArn) {
-      return toBuilder().setConsumerArn(consumerArn).build();
     }
 
     /** Specify reading from some initial position in stream. */

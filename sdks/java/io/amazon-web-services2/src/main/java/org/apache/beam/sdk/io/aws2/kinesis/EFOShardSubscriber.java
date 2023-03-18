@@ -21,7 +21,6 @@ import static org.apache.beam.sdk.io.aws2.kinesis.EFOShardSubscriber.State.INITI
 import static org.apache.beam.sdk.io.aws2.kinesis.EFOShardSubscriber.State.PAUSED;
 import static org.apache.beam.sdk.io.aws2.kinesis.EFOShardSubscriber.State.RUNNING;
 import static org.apache.beam.sdk.io.aws2.kinesis.EFOShardSubscriber.State.STOPPED;
-import static org.apache.beam.sdk.util.Preconditions.checkArgumentNotNull;
 import static org.apache.beam.sdk.util.Preconditions.checkStateNotNull;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkState;
 
@@ -123,14 +122,15 @@ class EFOShardSubscriber {
   }
 
   @SuppressWarnings({"FutureReturnValueIgnored", "all"})
-  public EFOShardSubscriber(
+  EFOShardSubscriber(
       EFOShardSubscribersPool pool,
       String shardId,
       KinesisIO.Read read,
+      String consumerArn,
       KinesisAsyncClient kinesis,
       int onErrorCoolDownMs) {
     this.pool = pool;
-    this.consumerArn = checkArgumentNotNull(read.getConsumerArn());
+    this.consumerArn = consumerArn;
     this.shardId = shardId;
     this.kinesis = kinesis;
     this.reSubscriptionHandler =

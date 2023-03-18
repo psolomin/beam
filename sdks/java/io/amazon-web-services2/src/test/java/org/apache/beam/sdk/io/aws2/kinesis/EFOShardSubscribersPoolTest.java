@@ -53,12 +53,14 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 
 public class EFOShardSubscribersPoolTest {
   private KinesisIO.Read readSpec;
+  private String consumerArn;
   private EFOStubbedKinesisAsyncClient kinesis;
   private EFOShardSubscribersPool pool;
 
   @Before
   public void setUp() {
     readSpec = createReadSpec();
+    consumerArn = "consumer-01";
   }
 
   @After
@@ -81,7 +83,7 @@ public class EFOShardSubscribersPoolTest {
     KinesisReaderCheckpoint initialCheckpoint =
         new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
-    pool = new EFOShardSubscribersPool(readSpec, kinesis);
+    pool = new EFOShardSubscribersPool(readSpec, consumerArn, kinesis);
     pool.start(initialCheckpoint);
     List<KinesisRecord> actualRecords = waitForRecords(pool, 18);
     validateRecords(actualRecords);
@@ -125,7 +127,7 @@ public class EFOShardSubscribersPoolTest {
     KinesisReaderCheckpoint initialCheckpoint =
         new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
-    pool = new EFOShardSubscribersPool(readSpec, kinesis);
+    pool = new EFOShardSubscribersPool(readSpec, consumerArn, kinesis);
     pool.start(initialCheckpoint);
     assertThat(waitForRecords(pool, 500).size()).isEqualTo(500);
     assertThat(waitForRecords(pool, 100).size()).isEqualTo(0); // nothing more is received
@@ -160,7 +162,7 @@ public class EFOShardSubscribersPoolTest {
     KinesisReaderCheckpoint initialCheckpoint =
         new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
-    pool = new EFOShardSubscribersPool(readSpec, kinesis);
+    pool = new EFOShardSubscribersPool(readSpec, consumerArn, kinesis);
     pool.start(initialCheckpoint);
     List<KinesisRecord> actualRecords = waitForRecords(pool, 5);
     assertThat(waitForRecords(pool, 10).size()).isEqualTo(0); // nothing more is received
@@ -193,7 +195,7 @@ public class EFOShardSubscribersPoolTest {
     KinesisReaderCheckpoint initialCheckpoint =
         new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
-    pool = new EFOShardSubscribersPool(readSpec, kinesis);
+    pool = new EFOShardSubscribersPool(readSpec, consumerArn, kinesis);
     pool.start(initialCheckpoint);
     List<KinesisRecord> actualRecords = waitForRecords(pool, 4);
     validateRecords(
@@ -210,7 +212,7 @@ public class EFOShardSubscribersPoolTest {
     // simulate re-consuming same content again
     kinesis.stubSubscribeToShard("shard-000", eventWithAggRecords(12, 6));
 
-    pool = new EFOShardSubscribersPool(readSpec, kinesis);
+    pool = new EFOShardSubscribersPool(readSpec, consumerArn, kinesis);
     pool.start(checkpoint);
     List<KinesisRecord> recordsAfterReStart = waitForRecords(pool, 3);
 
@@ -242,7 +244,7 @@ public class EFOShardSubscribersPoolTest {
     KinesisReaderCheckpoint initialCheckpoint =
         new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
-    pool = new EFOShardSubscribersPool(readSpec, kinesis);
+    pool = new EFOShardSubscribersPool(readSpec, consumerArn, kinesis);
     pool.start(initialCheckpoint);
     List<KinesisRecord> actualRecords = waitForRecords(pool, 1);
     assertEquals(0, actualRecords.size());
@@ -284,7 +286,7 @@ public class EFOShardSubscribersPoolTest {
     KinesisReaderCheckpoint initialCheckpoint =
         new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
-    pool = new EFOShardSubscribersPool(readSpec, kinesis, 1);
+    pool = new EFOShardSubscribersPool(readSpec, consumerArn, kinesis, 1);
     pool.start(initialCheckpoint);
 
     assertThat(waitForRecords(pool, 25)).hasSize(18);
@@ -339,7 +341,7 @@ public class EFOShardSubscribersPoolTest {
     KinesisReaderCheckpoint initialCheckpoint =
         new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
-    pool = new EFOShardSubscribersPool(readSpec, kinesis, 1);
+    pool = new EFOShardSubscribersPool(readSpec, consumerArn, kinesis, 1);
     pool.start(initialCheckpoint);
 
     assertThat(waitForRecords(pool, 500)).hasSize(500);
@@ -365,7 +367,7 @@ public class EFOShardSubscribersPoolTest {
     KinesisReaderCheckpoint initialCheckpoint =
         new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
-    pool = new EFOShardSubscribersPool(readSpec, kinesis, 1);
+    pool = new EFOShardSubscribersPool(readSpec, consumerArn, kinesis, 1);
     pool.start(initialCheckpoint);
 
     assertThat(waitForRecords(pool, 3)).hasSize(3);
@@ -401,7 +403,7 @@ public class EFOShardSubscribersPoolTest {
     KinesisReaderCheckpoint initialCheckpoint =
         new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
-    pool = new EFOShardSubscribersPool(readSpec, kinesis);
+    pool = new EFOShardSubscribersPool(readSpec, consumerArn, kinesis);
     pool.start(initialCheckpoint);
     Throwable exception = assertThrows(IOException.class, () -> waitForRecords(pool, 20));
     assertEquals("java.lang.RuntimeException: Oh...", exception.getMessage());
@@ -448,7 +450,7 @@ public class EFOShardSubscribersPoolTest {
     KinesisReaderCheckpoint initialCheckpoint =
         new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
-    pool = new EFOShardSubscribersPool(readSpec, kinesis);
+    pool = new EFOShardSubscribersPool(readSpec, consumerArn, kinesis);
     pool.start(initialCheckpoint);
     Throwable exception = assertThrows(IOException.class, () -> waitForRecords(pool, 10));
     assertEquals("java.util.concurrent.CompletionException: Err ...", exception.getMessage());
@@ -490,7 +492,7 @@ public class EFOShardSubscribersPoolTest {
     KinesisReaderCheckpoint initialCheckpoint =
         new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
-    pool = new EFOShardSubscribersPool(readSpec, kinesis);
+    pool = new EFOShardSubscribersPool(readSpec, consumerArn, kinesis);
     pool.start(initialCheckpoint);
     List<KinesisRecord> actualRecords = waitForRecords(pool, 35);
     assertEquals(34, actualRecords.size());
@@ -566,7 +568,7 @@ public class EFOShardSubscribersPoolTest {
     KinesisReaderCheckpoint initialCheckpoint =
         new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
-    pool = new EFOShardSubscribersPool(readSpec, kinesis);
+    pool = new EFOShardSubscribersPool(readSpec, consumerArn, kinesis);
     pool.start(initialCheckpoint);
     List<KinesisRecord> actualRecords = waitForRecords(pool, 38);
     assertEquals(37, actualRecords.size());
@@ -610,7 +612,7 @@ public class EFOShardSubscribersPoolTest {
     KinesisReaderCheckpoint initialCheckpoint =
         new ShardListingCheckpointGenerator(readSpec).generate(kinesis);
 
-    pool = new EFOShardSubscribersPool(readSpec, kinesis);
+    pool = new EFOShardSubscribersPool(readSpec, consumerArn, kinesis);
     pool.start(initialCheckpoint);
     ShardCheckpoint[] expectedShardsCheckpoints = {
       new ShardCheckpoint(

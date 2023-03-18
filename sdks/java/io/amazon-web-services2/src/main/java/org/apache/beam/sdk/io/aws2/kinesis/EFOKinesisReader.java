@@ -34,6 +34,7 @@ class EFOKinesisReader extends UnboundedSource.UnboundedReader<KinesisRecord> {
   private static final Logger LOG = LoggerFactory.getLogger(EFOKinesisReader.class);
 
   private final KinesisIO.Read spec;
+  private final String consumerArn;
   private final KinesisAsyncClient kinesis;
   private final KinesisSource source;
   private final CheckpointGenerator checkpointGenerator;
@@ -43,10 +44,12 @@ class EFOKinesisReader extends UnboundedSource.UnboundedReader<KinesisRecord> {
 
   EFOKinesisReader(
       KinesisIO.Read spec,
+      String consumerArn,
       KinesisAsyncClient kinesis,
       CheckpointGenerator checkpointGenerator,
       KinesisSource source) {
     this.spec = checkArgumentNotNull(spec);
+    this.consumerArn = checkArgumentNotNull(consumerArn);
     this.kinesis = checkArgumentNotNull(kinesis);
     this.checkpointGenerator = checkArgumentNotNull(checkpointGenerator);
     this.source = source;
@@ -120,7 +123,7 @@ class EFOKinesisReader extends UnboundedSource.UnboundedReader<KinesisRecord> {
   }
 
   private EFOShardSubscribersPool createPool() throws TransientKinesisException {
-    return new EFOShardSubscribersPool(spec, kinesis);
+    return new EFOShardSubscribersPool(spec, consumerArn, kinesis);
   }
 
   private KinesisRecord getOrThrow() throws NoSuchElementException {

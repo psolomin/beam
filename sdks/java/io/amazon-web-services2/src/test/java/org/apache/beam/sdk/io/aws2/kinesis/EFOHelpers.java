@@ -34,7 +34,6 @@ class EFOHelpers {
   static KinesisIO.Read createReadSpec() {
     return KinesisIO.read()
         .withStreamName("stream-01")
-        .withConsumerArn("consumer-01")
         .withInitialPositionInStream(InitialPositionInStream.LATEST);
   }
 
