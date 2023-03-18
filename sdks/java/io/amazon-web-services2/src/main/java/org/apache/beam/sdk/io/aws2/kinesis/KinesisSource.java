@@ -44,7 +44,7 @@ import software.amazon.awssdk.services.kinesis.KinesisAsyncClientBuilder;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.kinesis.common.KinesisClientUtil;
 
-public class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoint> {
+class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoint> {
 
   private static final Logger LOG = LoggerFactory.getLogger(KinesisSource.class);
 

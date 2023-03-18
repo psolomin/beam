@@ -48,6 +48,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
   "nullness" // TODO(https://github.com/apache/beam/issues/20497)
 })
 class ShardCheckpoint implements Serializable {
+  private static final long serialVersionUID = 103536540299998471L;
 
   private final String streamName;
   private final String shardId;
