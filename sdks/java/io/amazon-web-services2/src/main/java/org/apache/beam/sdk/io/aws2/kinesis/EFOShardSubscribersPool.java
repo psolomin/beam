@@ -18,6 +18,7 @@
 package org.apache.beam.sdk.io.aws2.kinesis;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkState;
 
 import java.io.IOException;
@@ -365,12 +366,12 @@ class EFOShardSubscribersPool {
     }
 
     void update(KinesisClientRecord r) {
-      sequenceNumber = r.sequenceNumber();
+      sequenceNumber = checkNotNull(r.sequenceNumber());
       subSequenceNumber = r.subSequenceNumber();
     }
 
     void update(EventRecords eventRecords) {
-      sequenceNumber = eventRecords.event.continuationSequenceNumber();
+      sequenceNumber = checkNotNull(eventRecords.event.continuationSequenceNumber());
       subSequenceNumber = 0L;
       subscriber.ackEvent();
     }
