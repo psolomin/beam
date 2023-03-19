@@ -22,14 +22,14 @@ import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.options.PipelineOptionsRegistrar;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 
-/** A registrar containing the default {@link KinesisSourceOptions}. */
+/** A registrar containing the default {@link KinesisIOOptions}. */
 @AutoService(PipelineOptionsRegistrar.class)
-public class KinesisSourcePipelineOptionsRegistrar implements PipelineOptionsRegistrar {
+public class KinesisIOOptionsRegistrar implements PipelineOptionsRegistrar {
 
   @Override
   public Iterable<Class<? extends PipelineOptions>> getPipelineOptions() {
     return ImmutableList.<Class<? extends PipelineOptions>>builder()
-        .add(KinesisSourceOptions.class)
+        .add(KinesisIOOptions.class)
         .build();
   }
 }

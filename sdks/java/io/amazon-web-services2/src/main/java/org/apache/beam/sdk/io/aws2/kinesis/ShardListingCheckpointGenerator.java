@@ -112,6 +112,10 @@ class ShardListingCheckpointGenerator implements CheckpointGenerator {
     }
   }
 
+  /**
+   * FIXME: This repeats {@link SimplifiedKinesisClient#buildShardFilterForStartingPoint(String,
+   * StartingPoint)}. Merge 2 implementations into 1.
+   */
   private static ShardFilter buildFilter(KinesisIO.Read readSpec) {
     StartingPoint sp = checkArgumentNotNull(readSpec.getInitialPosition());
     switch (checkArgumentNotNull(sp.getPosition())) {

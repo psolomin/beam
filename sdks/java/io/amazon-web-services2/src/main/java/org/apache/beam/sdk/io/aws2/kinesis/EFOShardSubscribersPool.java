@@ -400,6 +400,10 @@ class EFOShardSubscribersPool {
       }
     }
 
+    /**
+     * FIXME: needed is-before semantic. Why {@link ShardReadersPool} did it like this? This
+     * currently allows 1 record duplicate.
+     */
     boolean recordWasNotCheckPointedYet(KinesisRecord r) {
       return initCheckpoint.isBeforeOrAt(r);
     }

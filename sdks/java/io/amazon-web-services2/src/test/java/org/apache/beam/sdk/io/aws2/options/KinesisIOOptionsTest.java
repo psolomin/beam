@@ -23,20 +23,20 @@ import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
 import org.junit.Test;
 
-public class KinesisSourceOptionsTest {
-  private KinesisSourceOptions serializeDeserialize(KinesisSourceOptions opts) {
+public class KinesisIOOptionsTest {
+  private KinesisIOOptions serializeDeserialize(KinesisIOOptions opts) {
     return SerializationTestUtil.serializeDeserialize(PipelineOptions.class, opts)
-        .as(KinesisSourceOptions.class);
+        .as(KinesisIOOptions.class);
   }
 
-  private KinesisSourceOptions create(String... args) {
-    return PipelineOptionsFactory.fromArgs(args).as(KinesisSourceOptions.class);
+  private KinesisIOOptions create(String... args) {
+    return PipelineOptionsFactory.fromArgs(args).as(KinesisIOOptions.class);
   }
 
   @Test
   public void testSerializeDeserializeDefaults() {
-    KinesisSourceOptions options = create();
-    KinesisSourceOptions copy = serializeDeserialize(options);
+    KinesisIOOptions options = create();
+    KinesisIOOptions copy = serializeDeserialize(options);
 
     KinesisSourceToConsumerMapping consumerMapping = options.getKinesisSourceToConsumerMapping();
     KinesisSourceToConsumerMapping copyMapping = copy.getKinesisSourceToConsumerMapping();
@@ -46,11 +46,11 @@ public class KinesisSourceOptionsTest {
   }
 
   @Test
-  public void testSetAwsRegion() {
-    KinesisSourceOptions options =
+  public void testConsumerMapping() {
+    KinesisIOOptions options =
         create(
             "--kinesisSourceToConsumerMapping={\"stream-01\": \"arn-01\", \"stream-02\": \"arn-02\"}");
-    KinesisSourceOptions copy = serializeDeserialize(options);
+    KinesisIOOptions copy = serializeDeserialize(options);
     KinesisSourceToConsumerMapping consumerMapping = copy.getKinesisSourceToConsumerMapping();
 
     assertThat(consumerMapping.getConsumerArnForStream("stream-01")).isEqualTo("arn-01");

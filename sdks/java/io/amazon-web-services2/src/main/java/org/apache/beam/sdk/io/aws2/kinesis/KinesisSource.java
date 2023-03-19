@@ -31,7 +31,7 @@ import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.io.aws2.common.ClientBuilderFactory;
 import org.apache.beam.sdk.io.aws2.common.ClientConfiguration;
 import org.apache.beam.sdk.io.aws2.options.AwsOptions;
-import org.apache.beam.sdk.io.aws2.options.KinesisSourceOptions;
+import org.apache.beam.sdk.io.aws2.options.KinesisIOOptions;
 import org.apache.beam.sdk.io.aws2.options.KinesisSourceToConsumerMapping;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.util.Preconditions;
@@ -60,6 +60,11 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
     this.checkpointGenerator = checkNotNull(initialCheckpoint);
   }
 
+  /**
+   * FIXME: Avoid duplicated code.
+   *
+   * <p>Similar instance {@link ShardListingCheckpointGenerator#generate(Object)}.
+   */
   @Override
   public List<KinesisSource> split(int desiredNumSplits, PipelineOptions options) throws Exception {
     String streamName = Preconditions.checkArgumentNotNull(spec.getStreamName());
@@ -148,7 +153,7 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
   }
 
   private @Nullable String maybeResolveConsumerArn(PipelineOptions options, String streamName) {
-    KinesisSourceOptions sourcePipelineOptions = options.as(KinesisSourceOptions.class);
+    KinesisIOOptions sourcePipelineOptions = options.as(KinesisIOOptions.class);
     KinesisSourceToConsumerMapping streamToArnMapping =
         sourcePipelineOptions.getKinesisSourceToConsumerMapping();
     return streamToArnMapping.getConsumerArnForStream(streamName);

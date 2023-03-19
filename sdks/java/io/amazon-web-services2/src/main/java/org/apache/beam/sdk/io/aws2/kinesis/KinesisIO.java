@@ -53,6 +53,7 @@ import org.apache.beam.sdk.io.aws2.common.ObjectPool.ClientPool;
 import org.apache.beam.sdk.io.aws2.common.RetryConfiguration;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisPartitioner.ExplicitPartitioner;
 import org.apache.beam.sdk.io.aws2.options.AwsOptions;
+import org.apache.beam.sdk.io.aws2.options.KinesisIOOptions;
 import org.apache.beam.sdk.metrics.Counter;
 import org.apache.beam.sdk.metrics.Distribution;
 import org.apache.beam.sdk.metrics.Metrics;
@@ -165,6 +166,8 @@ import software.amazon.kinesis.common.InitialPositionInStream;
  *   "stream-02": "arn:aws:kinesis:...:stream/stream-02/consumer/my-consumer:1679576982",
  *   ...
  * }}</pre>
+ *
+ * <p>For other available options, check {@link KinesisIOOptions}.
  *
  * <p>EFO can be enabled / disabled any time without loosing consumer's positions in shards which
  * were already checkpoint-ed. Consumer ARN for a given stream can be changed any time, too.

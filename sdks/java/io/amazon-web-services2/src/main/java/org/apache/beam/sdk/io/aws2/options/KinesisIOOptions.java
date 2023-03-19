@@ -37,18 +37,21 @@ package org.apache.beam.sdk.io.aws2.options;
 
 import org.apache.beam.sdk.annotations.Experimental;
 import org.apache.beam.sdk.annotations.Experimental.Kind;
+import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.options.Default;
 import org.apache.beam.sdk.options.Description;
 import org.apache.beam.sdk.options.PipelineOptions;
 
 /**
- * Allows passing modify-able options for {@link org.apache.beam.sdk.io.aws2.kinesis.KinesisSource}.
+ * Allows passing modify-able options for {@link org.apache.beam.sdk.io.aws2.kinesis.KinesisIO}.
  *
- * <p>{@link org.apache.beam.sdk.io.aws2.kinesis.KinesisIO.Read} is serialized with the entire
- * Source object (at least in Flink runner) which was a trouble for EFO feature design.
+ * <p>This class is not bound to source only and can have modifiable options for sink, too.
  *
- * <p>If consumer ARN is part of KinesisIO.Read object, when started from a Flink savepoint,
- * consumer ARN string or null value would be forced from the savepoint. Consequences of this are:
+ * <p>This class appeared during the implementation of EFO consumer. {@link
+ * org.apache.beam.sdk.io.aws2.kinesis.KinesisIO.Read} is serialized with the entire Source object
+ * (at least in Flink runner) which was a trouble for EFO feature design: if consumer ARN is part of
+ * KinesisIO.Read object, when started from a Flink savepoint, consumer ARN string or null value
+ * would be forced from the savepoint. Consequences of this are:
  *
  * <ol>
  *   <li>Once a Kinesis source is started, its consumer ARN can't be changed without loosing state
@@ -56,9 +59,14 @@ import org.apache.beam.sdk.options.PipelineOptions;
  *   <li>Kinesis source can not have seamless enabling / disabling of EFO feature without loosing
  *       state (checkpoint-ed shard progress).
  * </ol>
+ *
+ * <p>This {@link PipelineOptions} extension allows having modifiable configurations for {@link
+ * org.apache.beam.sdk.io.UnboundedSource#split(int, PipelineOptions)} and {@link
+ * org.apache.beam.sdk.io.UnboundedSource#createReader(PipelineOptions,
+ * UnboundedSource.CheckpointMark)}, which is essential for seamless EFO switch on / off.
  */
 @Experimental(Kind.SOURCE_SINK)
-public interface KinesisSourceOptions extends PipelineOptions {
+public interface KinesisIOOptions extends PipelineOptions {
   /**
    * {@link KinesisSourceToConsumerMapping} used to enable / disable EFO.
    *
