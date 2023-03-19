@@ -31,8 +31,8 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
-import org.apache.beam.sdk.util.Preconditions;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Throwables;
+import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
@@ -69,7 +69,11 @@ class EFOShardSubscriber {
   /** Internal subscriber state. */
   private volatile State state = INITIALIZED;
 
-  private @Nullable StartingPosition initialPosition = null;
+  /**
+   * Kept only for cases when a subscription starts and then fails with a non-critical error, before
+   * any event updates {@link ShardEventsSubscriber#sequenceNumber}.
+   */
+  private @MonotonicNonNull StartingPosition initialPosition;
 
   /**
    * Completes once this shard subscriber is done, either normally (stopped or shard is completely
@@ -151,7 +155,6 @@ class EFOShardSubscriber {
                 pool.delayedTask(
                     () -> internalReSubscribe(lastContinuationSequenceNumber), onErrorCoolDownMs);
               } else {
-                Preconditions.checkArgumentNotNull(initialPosition);
                 pool.delayedTask(() -> internalSubscribe(initialPosition), onErrorCoolDownMs);
               }
             }

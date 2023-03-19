@@ -169,14 +169,19 @@ import software.amazon.kinesis.common.InitialPositionInStream;
  * <p>EFO can be enabled / disabled any time without loosing consumer's positions in shards which
  * were already checkpoint-ed. Consumer ARN for a given stream can be changed any time, too.
  *
- * <p>It is recommended to adjust runner's settings to prevent it from re-starting a EFO consumer(s)
+ * <p>Depending on the downstream processing performance, the EFO consumer will back-pressure
+ * internally.
+ *
+ * <p>Adjusting runner's settings is recommended - such that it does not (re)start EFO consumer(s)
  * faster than once per ~ 10 seconds. Internal calls to {@link
  * KinesisAsyncClient#subscribeToShard(SubscribeToShardRequest, SubscribeToShardResponseHandler)}
  * may throw ResourceInUseException otherwise, which will cause a crash loop.
  *
- * <p><b>NOTE:</b> When EFO is enabled, {@link RateLimitPolicy} does not apply. Depending on the
- * downstream processing performance, the EFO consumer will back-pressure internally. Otherwise, it
- * receives records from shards as fast as the downstream keeps up.
+ * <p>EFO source, when consuming from a stream with often re-sharding, may eventually get skewed
+ * load among runner workers: some may end up with no active shard subscriptions at all.
+ *
+ * <p><b>NOTE:</b> When EFO is enabled, {@link KinesisIO.Read#withMaxCapacityPerShard(Integer)} and
+ * {@link RateLimitPolicy} do not apply.
  *
  * <h3>Writing to Kinesis</h3>
  *

@@ -38,7 +38,7 @@ public class StaticCheckpointGeneratorTest {
    *
    * <ol>
    *   <li>Create Flink savepoint with Beam 2.46.0
-   *   <li>Start from Flink savepoint with Beam 2.47.0-SNAPSHOT
+   *   <li>Start from Flink savepoint with Beam 2.47.0-SNAPSHOT in development branch
    * </ol>
    *
    * <p>Neither of {@link CheckpointGenerator} implementations had explicit serialVersionUID, which
@@ -47,11 +47,12 @@ public class StaticCheckpointGeneratorTest {
    * <p><small>Caused by: java.io.InvalidClassException:
    * org.apache.beam.sdk.io.aws2.kinesis.StaticCheckpointGenerator; local class incompatible: stream
    * classdesc serialVersionUID = 5972850685627641931, local class serialVersionUID =
-   * -1716374792629517553
+   * -1716374792629517553</small>
    *
    * <p><small>Caused by: java.io.InvalidClassException:
    * org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint; local class incompatible: stream classdesc
-   * serialVersionUID = 103536540299998471, local class serialVersionUID = 2842489499429532931
+   * serialVersionUID = 103536540299998471, local class serialVersionUID =
+   * 2842489499429532931</small>
    */
   @Test
   public void testCompatibility() throws IOException, ClassNotFoundException {
