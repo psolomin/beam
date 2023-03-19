@@ -172,10 +172,12 @@ class EFOShardSubscriber {
             return;
           }
 
-          LOG.warn(
-              "Unknown case which is likely a bug: state={} seqnum={}",
-              state,
-              lastContinuationSequenceNumber);
+          String msg =
+              String.format(
+                  "Unknown case which is likely a bug: state=%s seqnum=%s",
+                  state, lastContinuationSequenceNumber);
+          LOG.warn(msg);
+          done.completeExceptionally(new IllegalStateException(msg));
         };
   }
 
@@ -321,9 +323,9 @@ class EFOShardSubscriber {
       event.accept(this);
     }
 
+    /** Nothing to do here, handled in {@link #reSubscriptionHandler}. */
     @Override
     public void onError(Throwable t) {
-      // nothing to do here, handled in {@link #reSubscriptionHandler}
       LOG.warn("Pool id = {} shard id = {} subscriber got error", pool.getPoolId(), shardId, t);
     }
 
