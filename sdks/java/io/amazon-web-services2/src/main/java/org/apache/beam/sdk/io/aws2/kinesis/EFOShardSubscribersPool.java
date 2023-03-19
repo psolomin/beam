@@ -76,7 +76,7 @@ class EFOShardSubscribersPool {
   private final ConcurrentLinkedQueue<EventRecords> eventQueue = new ConcurrentLinkedQueue<>();
 
   /**
-   * State map of currently active shards that can be checkpointed.
+   * State map of currently active shards that can be checkpoint-ed.
    *
    * <p>This map may only be accessed and updated from within {@link #start}, {@link #getNextRecord}
    * and dependent {@link #onEventDone} to prevent race conditions.
@@ -149,7 +149,7 @@ class EFOShardSubscribersPool {
    *
    * <p>{@link EFOShardSubscriber}s with their respective state are tracked in {@link #state}.
    */
-  public void start(Iterable<ShardCheckpoint> checkpoints) {
+  void start(Iterable<ShardCheckpoint> checkpoints) {
     LOG.info(
         "Starting pool {} {} {}. Checkpoints = {}",
         poolId,
@@ -187,7 +187,7 @@ class EFOShardSubscribersPool {
    *
    * <p>It polls the {@link #eventQueue} in a while loop to avoid returning null immediately if an
    * event without records arrived. There may be events with records after the {@link #current}, and
-   * it is better to poll again instead of having {@link KinesisReader#advance()} signalling false
+   * it is better to poll again instead of having {@link EFOKinesisReader#advance()} signalling false
    * to Beam. Otherwise, Beam would poll again later, which would introduce unnecessary delay.
    */
   @Nullable
@@ -317,12 +317,12 @@ class EFOShardSubscribersPool {
     eventQueue.offer(new EventRecords(shardId, event));
   }
 
-  public Instant getWatermark() {
+  Instant getWatermark() {
     return latestRecordTimestampPolicy.getWatermark();
   }
 
   /** This is assumed to be never called before {@link #start} is called. */
-  public KinesisReaderCheckpoint getCheckpointMark() {
+  KinesisReaderCheckpoint getCheckpointMark() {
     List<ShardCheckpoint> checkpoints = new ArrayList<>();
     for (ShardState shardState : state.values()) {
       checkpoints.add(shardState.toCheckpoint());
@@ -331,7 +331,7 @@ class EFOShardSubscribersPool {
     return new KinesisReaderCheckpoint(checkpoints);
   }
 
-  public void stop() {
+  void stop() {
     LOG.info("Stopping pool {}", poolId);
     isStopped = true;
     state.forEach((shardId, st) -> st.subscriber.cancel());
@@ -416,7 +416,7 @@ class EFOShardSubscribersPool {
     SubscribeToShardEvent event;
     @MonotonicNonNull Iterator<KinesisClientRecord> delegate = null;
 
-    public EventRecords(String shardId, SubscribeToShardEvent event) {
+    EventRecords(String shardId, SubscribeToShardEvent event) {
       this.shardId = shardId;
       this.event = event;
     }
