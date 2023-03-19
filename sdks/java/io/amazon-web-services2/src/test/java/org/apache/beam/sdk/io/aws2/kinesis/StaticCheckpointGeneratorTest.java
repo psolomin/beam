@@ -31,6 +31,28 @@ import org.junit.Test;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 
 public class StaticCheckpointGeneratorTest {
+  /**
+   * {@link KinesisSource} serialization changed after some changes in its data.
+   *
+   * <p>Incompatibility caused failures in the following scenario:
+   *
+   * <ol>
+   *   <li>Create Flink savepoint with Beam 2.46.0
+   *   <li>Start from Flink savepoint with Beam 2.47.0-SNAPSHOT
+   * </ol>
+   *
+   * <p>Neither of {@link CheckpointGenerator} implementations had explicit serialVersionUID, which
+   * caused errors:
+   *
+   * <p><small>Caused by: java.io.InvalidClassException:
+   * org.apache.beam.sdk.io.aws2.kinesis.StaticCheckpointGenerator; local class incompatible: stream
+   * classdesc serialVersionUID = 5972850685627641931, local class serialVersionUID =
+   * -1716374792629517553
+   *
+   * <p><small>Caused by: java.io.InvalidClassException:
+   * org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint; local class incompatible: stream classdesc
+   * serialVersionUID = 103536540299998471, local class serialVersionUID = 2842489499429532931
+   */
   @Test
   public void testCompatibility() throws IOException, ClassNotFoundException {
     ShardCheckpoint shardCheckpoint =

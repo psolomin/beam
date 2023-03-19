@@ -119,6 +119,7 @@ class EFOShardSubscribersPool {
   // EventRecords iterator that is currently consumed
   @Nullable EventRecords current = null;
 
+  // FIXME: Add support for injected watermark policy - as in ShardRecordsIterator
   private final WatermarkPolicy latestRecordTimestampPolicy =
       WatermarkPolicyFactory.withArrivalTimePolicy().createWatermarkPolicy();
 
