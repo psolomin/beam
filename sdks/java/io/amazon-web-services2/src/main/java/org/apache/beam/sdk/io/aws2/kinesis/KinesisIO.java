@@ -159,7 +159,7 @@ import software.amazon.kinesis.common.InitialPositionInStream;
  * href="https://docs.aws.amazon.com/streams/latest/dev/enhanced-consumers.html">Consumers with
  * Dedicated Throughput</a>
  *
- * <p>EFO can be enabled for one or more {@link KinesisIO.Read} instances via pipeline options:
+ * <p>EFO can be enabled for one or more {@link Read} instances via pipeline options:
  *
  * <pre>{@code --kinesisSourceToConsumerMapping={
  *   "stream-01": "arn:aws:kinesis:...:stream/stream-01/consumer/consumer-01:1678576714",
@@ -183,8 +183,16 @@ import software.amazon.kinesis.common.InitialPositionInStream;
  * <p>EFO source, when consuming from a stream with often re-sharding, may eventually get skewed
  * load among runner workers: some may end up with no active shard subscriptions at all.
  *
- * <p><b>NOTE:</b> When EFO is enabled, {@link KinesisIO.Read#withMaxCapacityPerShard(Integer)} and
- * {@link RateLimitPolicy} do not apply.
+ * <p><b>NOTE:</b> When EFO is enabled, the following configurations are ignored:
+ *
+ * <ul>
+ *   <li>{@link Read#withMaxCapacityPerShard(Integer)}
+ *   <li>{@link Read#withRequestRecordsLimit(int)}
+ *   <li>{@link Read#withCustomRateLimitPolicy(RateLimitPolicyFactory)}
+ *   <li>{@link Read#withFixedDelayRateLimitPolicy()}
+ *   <li>{@link Read#withDynamicDelayRateLimitPolicy(Supplier)}
+ *   <li>{@link Read#withUpToDateThreshold(Duration)}
+ * </ul>
  *
  * <h3>Writing to Kinesis</h3>
  *
