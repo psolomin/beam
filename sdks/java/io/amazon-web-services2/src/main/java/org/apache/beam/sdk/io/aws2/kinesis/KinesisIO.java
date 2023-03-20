@@ -53,7 +53,6 @@ import org.apache.beam.sdk.io.aws2.common.ObjectPool.ClientPool;
 import org.apache.beam.sdk.io.aws2.common.RetryConfiguration;
 import org.apache.beam.sdk.io.aws2.kinesis.KinesisPartitioner.ExplicitPartitioner;
 import org.apache.beam.sdk.io.aws2.options.AwsOptions;
-import org.apache.beam.sdk.io.aws2.options.KinesisIOOptions;
 import org.apache.beam.sdk.metrics.Counter;
 import org.apache.beam.sdk.metrics.Distribution;
 import org.apache.beam.sdk.metrics.Metrics;
@@ -161,7 +160,7 @@ import software.amazon.kinesis.common.InitialPositionInStream;
  *
  * <p>EFO can be enabled for one or more {@link Read} instances via pipeline options:
  *
- * <pre>{@code --kinesisSourceToConsumerMapping={
+ * <pre>{@code --kinesisIOReadStreamToConsumerArnMapping={
  *   "stream-01": "arn:aws:kinesis:...:stream/stream-01/consumer/consumer-01:1678576714",
  *   "stream-02": "arn:aws:kinesis:...:stream/stream-02/consumer/my-consumer:1679576982",
  *   ...

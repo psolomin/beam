@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.options;
+package org.apache.beam.sdk.io.aws2.kinesis;
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
@@ -35,12 +35,18 @@ package org.apache.beam.sdk.io.aws2.options;
  * limitations under the License.
  */
 
+import com.google.auto.service.AutoService;
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.beam.sdk.annotations.Experimental;
 import org.apache.beam.sdk.annotations.Experimental.Kind;
 import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.options.Default;
+import org.apache.beam.sdk.options.DefaultValueFactory;
 import org.apache.beam.sdk.options.Description;
 import org.apache.beam.sdk.options.PipelineOptions;
+import org.apache.beam.sdk.options.PipelineOptionsRegistrar;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 
 /**
  * Allows passing modify-able options for {@link org.apache.beam.sdk.io.aws2.kinesis.KinesisIO}.
@@ -68,20 +74,39 @@ import org.apache.beam.sdk.options.PipelineOptions;
 @Experimental(Kind.SOURCE_SINK)
 public interface KinesisIOOptions extends PipelineOptions {
   /**
-   * {@link KinesisSourceToConsumerMapping} used to enable / disable EFO.
+   * Used to enable / disable EFO.
    *
    * <p>Example:
    *
-   * <pre>{@code --kinesisSourceToConsumerMapping={
+   * <pre>{@code --kinesisIOReadStreamToConsumerArnMapping={
    *   "stream-01": "arn:aws:kinesis:...:stream/stream-01/consumer/consumer-01:1678576714",
    *   "stream-02": "arn:aws:kinesis:...:stream/stream-02/consumer/my-consumer:1679576982",
    *   ...
    * }}</pre>
    */
-  @Description("Mapping of streams' names to consumer ARNs of those streams")
-  @Default.InstanceFactory(
-      KinesisSourceToConsumerMapping.KinesisSourceToConsumerMappingFactory.class)
-  KinesisSourceToConsumerMapping getKinesisSourceToConsumerMapping();
+  @Description("Mapping of streams' names to consumer ARNs of those streams.")
+  @Default.InstanceFactory(MapFactory.class)
+  Map<String, String> getKinesisIOReadStreamToConsumerArnMapping();
 
-  void setKinesisSourceToConsumerMapping(KinesisSourceToConsumerMapping value);
+  void setKinesisIOReadStreamToConsumerArnMapping(Map<String, String> value);
+
+  class MapFactory implements DefaultValueFactory<HashMap<String, String>> {
+
+    @Override
+    public HashMap<String, String> create(PipelineOptions options) {
+      return new HashMap<>();
+    }
+  }
+
+  /** A registrar containing the default {@link KinesisIOOptions}. */
+  @AutoService(PipelineOptionsRegistrar.class)
+  class KinesisIOOptionsRegistrar implements PipelineOptionsRegistrar {
+
+    @Override
+    public Iterable<Class<? extends PipelineOptions>> getPipelineOptions() {
+      return ImmutableList.<Class<? extends PipelineOptions>>builder()
+          .add(KinesisIOOptions.class)
+          .build();
+    }
+  }
 }

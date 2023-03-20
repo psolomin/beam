@@ -15,10 +15,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.beam.sdk.io.aws2.options;
+package org.apache.beam.sdk.io.aws2.kinesis;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Map;
+import org.apache.beam.sdk.io.aws2.options.SerializationTestUtil;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
 import org.junit.Test;
@@ -38,8 +40,8 @@ public class KinesisIOOptionsTest {
     KinesisIOOptions options = create();
     KinesisIOOptions copy = serializeDeserialize(options);
 
-    KinesisSourceToConsumerMapping consumerMapping = options.getKinesisSourceToConsumerMapping();
-    KinesisSourceToConsumerMapping copyMapping = copy.getKinesisSourceToConsumerMapping();
+    Map<String, String> consumerMapping = options.getKinesisIOReadStreamToConsumerArnMapping();
+    Map<String, String> copyMapping = copy.getKinesisIOReadStreamToConsumerArnMapping();
 
     assertThat(copyMapping.size()).isEqualTo(0);
     assertThat(copyMapping).isEqualTo(consumerMapping);
@@ -49,12 +51,12 @@ public class KinesisIOOptionsTest {
   public void testConsumerMapping() {
     KinesisIOOptions options =
         create(
-            "--kinesisSourceToConsumerMapping={\"stream-01\": \"arn-01\", \"stream-02\": \"arn-02\"}");
+            "--kinesisIOReadStreamToConsumerArnMapping={\"stream-01\": \"arn-01\", \"stream-02\": \"arn-02\"}");
     KinesisIOOptions copy = serializeDeserialize(options);
-    KinesisSourceToConsumerMapping consumerMapping = copy.getKinesisSourceToConsumerMapping();
+    Map<String, String> consumerMapping = copy.getKinesisIOReadStreamToConsumerArnMapping();
 
-    assertThat(consumerMapping.getConsumerArnForStream("stream-01")).isEqualTo("arn-01");
-    assertThat(consumerMapping.getConsumerArnForStream("stream-02")).isEqualTo("arn-02");
-    assertThat(consumerMapping.getConsumerArnForStream("other")).isNull();
+    assertThat(consumerMapping.get("stream-01")).isEqualTo("arn-01");
+    assertThat(consumerMapping.get("stream-02")).isEqualTo("arn-02");
+    assertThat(consumerMapping.get("other")).isNull();
   }
 }

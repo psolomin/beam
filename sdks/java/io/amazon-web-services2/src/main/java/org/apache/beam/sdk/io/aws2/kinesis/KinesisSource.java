@@ -24,6 +24,7 @@ import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.L
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 import org.apache.beam.sdk.coders.Coder;
 import org.apache.beam.sdk.coders.SerializableCoder;
@@ -31,8 +32,6 @@ import org.apache.beam.sdk.io.UnboundedSource;
 import org.apache.beam.sdk.io.aws2.common.ClientBuilderFactory;
 import org.apache.beam.sdk.io.aws2.common.ClientConfiguration;
 import org.apache.beam.sdk.io.aws2.options.AwsOptions;
-import org.apache.beam.sdk.io.aws2.options.KinesisIOOptions;
-import org.apache.beam.sdk.io.aws2.options.KinesisSourceToConsumerMapping;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.util.Preconditions;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -154,8 +153,8 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
 
   private @Nullable String maybeResolveConsumerArn(PipelineOptions options, String streamName) {
     KinesisIOOptions sourcePipelineOptions = options.as(KinesisIOOptions.class);
-    KinesisSourceToConsumerMapping streamToArnMapping =
-        sourcePipelineOptions.getKinesisSourceToConsumerMapping();
-    return streamToArnMapping.getConsumerArnForStream(streamName);
+    Map<String, String> streamToArnMapping =
+        sourcePipelineOptions.getKinesisIOReadStreamToConsumerArnMapping();
+    return streamToArnMapping.get(streamName);
   }
 }
