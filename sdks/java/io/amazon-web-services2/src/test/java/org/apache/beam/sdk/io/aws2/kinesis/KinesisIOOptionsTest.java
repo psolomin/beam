@@ -17,12 +17,12 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis;
 
+import static org.apache.beam.sdk.io.aws2.kinesis.EFOHelpers.createIOOptions;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Map;
 import org.apache.beam.sdk.io.aws2.options.SerializationTestUtil;
 import org.apache.beam.sdk.options.PipelineOptions;
-import org.apache.beam.sdk.options.PipelineOptionsFactory;
 import org.junit.Test;
 
 public class KinesisIOOptionsTest {
@@ -31,17 +31,13 @@ public class KinesisIOOptionsTest {
         .as(KinesisIOOptions.class);
   }
 
-  private KinesisIOOptions create(String... args) {
-    return PipelineOptionsFactory.fromArgs(args).as(KinesisIOOptions.class);
-  }
-
   @Test
   public void testSerializeDeserializeDefaults() {
-    KinesisIOOptions options = create();
+    KinesisIOOptions options = createIOOptions();
     KinesisIOOptions copy = serializeDeserialize(options);
 
-    Map<String, String> consumerMapping = options.getKinesisIOReadStreamToConsumerArnMapping();
-    Map<String, String> copyMapping = copy.getKinesisIOReadStreamToConsumerArnMapping();
+    Map<String, String> consumerMapping = options.getKinesisIOConsumerArns();
+    Map<String, String> copyMapping = copy.getKinesisIOConsumerArns();
 
     assertThat(copyMapping.size()).isEqualTo(0);
     assertThat(copyMapping).isEqualTo(consumerMapping);
@@ -50,13 +46,25 @@ public class KinesisIOOptionsTest {
   @Test
   public void testConsumerMapping() {
     KinesisIOOptions options =
-        create(
-            "--kinesisIOReadStreamToConsumerArnMapping={\"stream-01\": \"arn-01\", \"stream-02\": \"arn-02\"}");
+        createIOOptions(
+            "--kinesisIOConsumerArns={\"stream-01\": \"arn-01\", \"stream-02\": \"arn-02\"}");
     KinesisIOOptions copy = serializeDeserialize(options);
-    Map<String, String> consumerMapping = copy.getKinesisIOReadStreamToConsumerArnMapping();
+    Map<String, String> consumerMapping = copy.getKinesisIOConsumerArns();
 
     assertThat(consumerMapping.get("stream-01")).isEqualTo("arn-01");
     assertThat(consumerMapping.get("stream-02")).isEqualTo("arn-02");
+    assertThat(consumerMapping.get("other")).isNull();
+  }
+
+  @Test
+  public void testNullConsumerArn() {
+    KinesisIOOptions options = createIOOptions("--kinesisIOConsumerArns={\"stream-01\": null}");
+    KinesisIOOptions copy = serializeDeserialize(options);
+    Map<String, String> consumerMapping = copy.getKinesisIOConsumerArns();
+
+    assertThat(consumerMapping.containsKey("stream-01")).isTrue();
+    assertThat(consumerMapping.get("stream-01")).isNull();
+    assertThat(consumerMapping.containsKey("other")).isFalse();
     assertThat(consumerMapping.get("other")).isNull();
   }
 }

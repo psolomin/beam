@@ -44,6 +44,15 @@ import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.kinesis.common.KinesisClientUtil;
 
 class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoint> {
+  /**
+   * Extracted from org.apache.beam:beam-sdks-java-io-amazon-web-services2:2.46.0.
+   *
+   * <pre>{@code
+   * serialver -classpath "target/dependency/*" \
+   *   org.apache.beam.sdk.io.aws2.kinesis.KinesisSource
+   * }</pre>
+   */
+  private static final long serialVersionUID = -6683426380627845784L;
 
   private static final Logger LOG = LoggerFactory.getLogger(KinesisSource.class);
 
@@ -66,8 +75,7 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
    */
   @Override
   public List<KinesisSource> split(int desiredNumSplits, PipelineOptions options) throws Exception {
-    String streamName = Preconditions.checkArgumentNotNull(spec.getStreamName());
-    String consumerArn = maybeResolveConsumerArn(options, streamName);
+    String consumerArn = resolveConsumerArn(spec, options);
     List<KinesisSource> sources = newArrayList();
     if (consumerArn == null) {
       try (SimplifiedKinesisClient client = createClient(options)) {
@@ -98,17 +106,15 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
       checkpointGenerator = new StaticCheckpointGenerator(checkpointMark);
     }
 
-    String streamName = Preconditions.checkArgumentNotNull(spec.getStreamName());
-    String consumerArn = maybeResolveConsumerArn(options, streamName);
+    String consumerArn = resolveConsumerArn(spec, options);
 
     if (consumerArn == null) {
       LOG.info("Creating new reader using {}", checkpointGenerator);
       return new KinesisReader(spec, createClient(options), checkpointGenerator, this);
     } else {
       LOG.info("Creating new EFO reader using {}", checkpointGenerator);
-      KinesisSource source = new KinesisSource(spec);
       return new EFOKinesisReader(
-          spec, consumerArn, createAsyncClient(options), checkpointGenerator, source);
+          spec, consumerArn, createAsyncClient(options), checkpointGenerator, this);
     }
   }
 
@@ -151,10 +157,23 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
         .build();
   }
 
-  private @Nullable String maybeResolveConsumerArn(PipelineOptions options, String streamName) {
-    KinesisIOOptions sourcePipelineOptions = options.as(KinesisIOOptions.class);
-    Map<String, String> streamToArnMapping =
-        sourcePipelineOptions.getKinesisIOReadStreamToConsumerArnMapping();
-    return streamToArnMapping.get(streamName);
+  /**
+   * Provides final consumer ARN config.
+   *
+   * <p>{@link PipelineOptions} instance will overwrite anything given by {@link KinesisIO.Read}.
+   */
+  static @Nullable String resolveConsumerArn(KinesisIO.Read spec, PipelineOptions options) {
+    String streamName = Preconditions.checkArgumentNotNull(spec.getStreamName());
+    KinesisIOOptions sourceOptions = options.as(KinesisIOOptions.class);
+    Map<String, String> streamToArnMapping = sourceOptions.getKinesisIOConsumerArns();
+
+    String consumerArn;
+    if (streamToArnMapping.containsKey(streamName)) {
+      consumerArn = streamToArnMapping.get(streamName); // can resolve to null too
+    } else {
+      consumerArn = spec.getConsumerArn();
+    }
+
+    return consumerArn;
   }
 }

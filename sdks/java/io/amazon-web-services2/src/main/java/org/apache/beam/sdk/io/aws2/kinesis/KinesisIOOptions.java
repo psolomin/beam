@@ -49,15 +49,19 @@ import org.apache.beam.sdk.options.PipelineOptionsRegistrar;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 
 /**
- * Allows passing modify-able options for {@link org.apache.beam.sdk.io.aws2.kinesis.KinesisIO}.
+ * PipelineOptions for {@link KinesisIO}.
  *
- * <p>This class is not bound to source only and can have modifiable options for sink, too.
+ * <p>Allows passing modify-able configurations in cases when some runner implementation persists
+ * {@link KinesisIO.Read} serialized objects. Adding new configurations to this class should be
+ * exceptional, and standard {@link KinesisIO.Read} / {@link KinesisIO.Write} should be preferred in
+ * most of the cases.
  *
- * <p>This class appeared during the implementation of EFO consumer. {@link
- * org.apache.beam.sdk.io.aws2.kinesis.KinesisIO.Read} is serialized with the entire Source object
- * (at least in Flink runner) which was a trouble for EFO feature design: if consumer ARN is part of
- * KinesisIO.Read object, when started from a Flink savepoint, consumer ARN string or null value
- * would be forced from the savepoint. Consequences of this are:
+ * <p>This class appeared during the implementation of EFO consumer. In Flink runner, {@link
+ * KinesisIO.Read} is serialized with the entire {@link KinesisSource} object which was a trouble
+ * for EFO feature design: if consumer ARN is part of KinesisIO.Read object, when started from a
+ * Flink savepoint, consumer ARN string or null value would be forced from the savepoint.
+ *
+ * <p>Consequences of this are:
  *
  * <ol>
  *   <li>Once a Kinesis source is started, its consumer ARN can't be changed without loosing state
@@ -78,7 +82,7 @@ public interface KinesisIOOptions extends PipelineOptions {
    *
    * <p>Example:
    *
-   * <pre>{@code --kinesisIOReadStreamToConsumerArnMapping={
+   * <pre>{@code --kinesisIOConsumerArns={
    *   "stream-01": "arn:aws:kinesis:...:stream/stream-01/consumer/consumer-01:1678576714",
    *   "stream-02": "arn:aws:kinesis:...:stream/stream-02/consumer/my-consumer:1679576982",
    *   ...
@@ -86,9 +90,9 @@ public interface KinesisIOOptions extends PipelineOptions {
    */
   @Description("Mapping of streams' names to consumer ARNs of those streams.")
   @Default.InstanceFactory(MapFactory.class)
-  Map<String, String> getKinesisIOReadStreamToConsumerArnMapping();
+  Map<String, String> getKinesisIOConsumerArns();
 
-  void setKinesisIOReadStreamToConsumerArnMapping(Map<String, String> value);
+  void setKinesisIOConsumerArns(Map<String, String> value);
 
   class MapFactory implements DefaultValueFactory<HashMap<String, String>> {
 
