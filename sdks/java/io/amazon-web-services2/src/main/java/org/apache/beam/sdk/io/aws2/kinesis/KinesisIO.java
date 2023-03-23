@@ -366,6 +366,15 @@ public final class KinesisIO {
     "nullness" // TODO(https://github.com/apache/beam/issues/20497)
   })
   public abstract static class Read extends PTransform<PBegin, PCollection<KinesisRecord>> {
+    /**
+     * Extracted from org.apache.beam:beam-sdks-java-io-amazon-web-services2:2.46.0.
+     *
+     * <pre>{@code
+     * serialver -classpath "target/dependency/*" \
+     *   org.apache.beam.sdk.io.aws2.kinesis.AutoValue_KinesisIO_Read
+     * }</pre>
+     */
+    private static final long serialVersionUID = 410184916277145716L;
 
     abstract @Nullable String getStreamName();
 
