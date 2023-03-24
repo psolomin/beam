@@ -37,7 +37,7 @@ class EFOKinesisReader extends UnboundedSource.UnboundedReader<KinesisRecord> {
   private final String consumerArn;
   private final KinesisAsyncClient kinesis;
   private final KinesisSource source;
-  private final CheckpointGenerator checkpointGenerator;
+  private final KinesisReaderCheckpoint initCheckpoint;
 
   private @Nullable KinesisRecord currentRecord = null;
   private @Nullable EFOShardSubscribersPool shardSubscribersPool = null;
@@ -46,23 +46,22 @@ class EFOKinesisReader extends UnboundedSource.UnboundedReader<KinesisRecord> {
       KinesisIO.Read spec,
       String consumerArn,
       KinesisAsyncClient kinesis,
-      CheckpointGenerator checkpointGenerator,
+      KinesisReaderCheckpoint initCheckpoint,
       KinesisSource source) {
     this.spec = checkArgumentNotNull(spec);
     this.consumerArn = checkArgumentNotNull(consumerArn);
     this.kinesis = checkArgumentNotNull(kinesis);
-    this.checkpointGenerator = checkArgumentNotNull(checkpointGenerator);
+    this.initCheckpoint = checkArgumentNotNull(initCheckpoint);
     this.source = source;
   }
 
   @Override
   @SuppressWarnings("dereference.of.nullable")
   public boolean start() throws IOException {
-    LOG.info("Starting reader using {}", checkpointGenerator);
+    LOG.info("Starting reader using {}", initCheckpoint);
     try {
       shardSubscribersPool = createPool();
-      KinesisReaderCheckpoint initialCheckpoint = checkpointGenerator.generate(kinesis);
-      shardSubscribersPool.start(initialCheckpoint);
+      shardSubscribersPool.start(initCheckpoint);
       return advance();
     } catch (TransientKinesisException e) {
       throw new IOException(e);

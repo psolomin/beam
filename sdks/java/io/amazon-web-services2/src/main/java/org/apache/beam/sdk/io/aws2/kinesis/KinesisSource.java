@@ -76,7 +76,8 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
   @Override
   public List<KinesisSource> split(int desiredNumSplits, PipelineOptions options) throws Exception {
     List<KinesisSource> sources = newArrayList();
-    KinesisReaderCheckpoint checkpoint = initCheckpoint(spec, options);
+    KinesisReaderCheckpoint checkpoint =
+        SourceResolver.initCheckpoint(spec, options, checkpointGenerator);
     for (KinesisReaderCheckpoint partition : checkpoint.splitInto(desiredNumSplits)) {
       sources.add(new KinesisSource(spec, new StaticCheckpointGenerator(partition)));
     }
@@ -87,11 +88,17 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
   public UnboundedReader<KinesisRecord> createReader(
       PipelineOptions options, @Nullable KinesisReaderCheckpoint checkpointMark)
       throws IOException {
-    CheckpointGenerator checkpointGenerator = this.checkpointGenerator;
+    KinesisReaderCheckpoint initCheckpoint;
     if (checkpointMark != null) {
-      checkpointGenerator = new StaticCheckpointGenerator(checkpointMark);
+      initCheckpoint = checkpointMark;
+    } else {
+      try {
+        initCheckpoint = SourceResolver.initCheckpoint(spec, options, this.checkpointGenerator);
+      } catch (Exception e) {
+        throw new IOException(e);
+      }
     }
-    return SourceResolver.initReader(spec, options, checkpointGenerator, this);
+    return SourceResolver.initReader(spec, options, initCheckpoint, this);
   }
 
   @Override
@@ -102,13 +109,6 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
   @Override
   public Coder<KinesisRecord> getOutputCoder() {
     return KinesisRecordCoder.of();
-  }
-
-  KinesisReaderCheckpoint initCheckpoint(KinesisIO.Read spec, PipelineOptions options)
-      throws Exception {
-    try (AutoCloseable client = SourceResolver.createClient(spec, options)) {
-      return checkpointGenerator.generate(client);
-    }
   }
 
   static class SourceResolver {
@@ -132,6 +132,14 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
       return consumerArn;
     }
 
+    static KinesisReaderCheckpoint initCheckpoint(
+        KinesisIO.Read spec, PipelineOptions options, CheckpointGenerator checkpointGenerator)
+        throws Exception {
+      try (AutoCloseable client = SourceResolver.createClient(spec, options)) {
+        return checkpointGenerator.generate(client);
+      }
+    }
+
     static AutoCloseable createClient(KinesisIO.Read spec, PipelineOptions options) {
       String consumerArn = resolveConsumerArn(spec, options);
       if (consumerArn == null) {
@@ -144,18 +152,17 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
     static UnboundedReader<KinesisRecord> initReader(
         KinesisIO.Read spec,
         PipelineOptions options,
-        CheckpointGenerator checkpointGenerator,
+        KinesisReaderCheckpoint checkpointMark,
         KinesisSource source) {
       String consumerArn = resolveConsumerArn(spec, options);
 
       if (consumerArn == null) {
-        LOG.info("Creating new reader using {}", checkpointGenerator);
-        return new KinesisReader(
-            spec, createSyncClient(spec, options), checkpointGenerator, source);
+        LOG.info("Creating new reader using {}", checkpointMark);
+        return new KinesisReader(spec, createSyncClient(spec, options), checkpointMark, source);
       } else {
-        LOG.info("Creating new EFO reader using {}", checkpointGenerator);
+        LOG.info("Creating new EFO reader using {}", checkpointMark);
         return new EFOKinesisReader(
-            spec, consumerArn, createAsyncClient(spec, options), checkpointGenerator, source);
+            spec, consumerArn, createAsyncClient(spec, options), checkpointMark, source);
       }
     }
 
