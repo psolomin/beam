@@ -91,7 +91,7 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
     if (checkpointMark != null) {
       checkpointGenerator = new StaticCheckpointGenerator(checkpointMark);
     }
-    return initReader(spec, options, checkpointGenerator, this);
+    return SourceResolver.initReader(spec, options, checkpointGenerator, this);
   }
 
   @Override
@@ -104,85 +104,88 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
     return KinesisRecordCoder.of();
   }
 
-  static SimplifiedKinesisClient createSyncClient(KinesisIO.Read spec, PipelineOptions options) {
-    AwsOptions awsOptions = options.as(AwsOptions.class);
-    Supplier<KinesisClient> kinesisSupplier;
-    Supplier<CloudWatchClient> cloudWatchSupplier;
-    if (spec.getAWSClientsProvider() != null) {
-      kinesisSupplier =
-          Preconditions.checkArgumentNotNull(spec.getAWSClientsProvider())::getKinesisClient;
-      cloudWatchSupplier =
-          Preconditions.checkArgumentNotNull(spec.getAWSClientsProvider())::getCloudWatchClient;
-    } else {
-      ClientConfiguration config =
-          Preconditions.checkArgumentNotNull(spec.getClientConfiguration());
-      kinesisSupplier = () -> buildClient(awsOptions, KinesisClient.builder(), config);
-      cloudWatchSupplier = () -> buildClient(awsOptions, CloudWatchClient.builder(), config);
-    }
-    return new SimplifiedKinesisClient(
-        kinesisSupplier, cloudWatchSupplier, spec.getRequestRecordsLimit());
-  }
-
-  static KinesisAsyncClient createAsyncClient(KinesisIO.Read spec, PipelineOptions options) {
-    AwsOptions awsOptions = options.as(AwsOptions.class);
-    ClientBuilderFactory builderFactory = ClientBuilderFactory.getFactory(awsOptions);
-    KinesisAsyncClientBuilder adjustedBuilder =
-        KinesisClientUtil.adjustKinesisClientBuilder(KinesisAsyncClient.builder());
-    return builderFactory
-        .create(adjustedBuilder, checkArgumentNotNull(spec.getClientConfiguration()), awsOptions)
-        .build();
-  }
-
-  /**
-   * Provides final consumer ARN config.
-   *
-   * <p>{@link PipelineOptions} instance will overwrite anything given by {@link KinesisIO.Read}.
-   */
-  static @Nullable String resolveConsumerArn(KinesisIO.Read spec, PipelineOptions options) {
-    String streamName = Preconditions.checkArgumentNotNull(spec.getStreamName());
-    KinesisIOOptions sourceOptions = options.as(KinesisIOOptions.class);
-    Map<String, String> streamToArnMapping = sourceOptions.getKinesisIOConsumerArns();
-
-    String consumerArn;
-    if (streamToArnMapping.containsKey(streamName)) {
-      consumerArn = streamToArnMapping.get(streamName); // can resolve to null too
-    } else {
-      consumerArn = spec.getConsumerArn();
-    }
-
-    return consumerArn;
-  }
-
   KinesisReaderCheckpoint initCheckpoint(KinesisIO.Read spec, PipelineOptions options)
       throws Exception {
-    try (AutoCloseable client = createClient(spec, options)) {
+    try (AutoCloseable client = SourceResolver.createClient(spec, options)) {
       return checkpointGenerator.generate(client);
     }
   }
 
-  static AutoCloseable createClient(KinesisIO.Read spec, PipelineOptions options) {
-    String consumerArn = resolveConsumerArn(spec, options);
-    if (consumerArn == null) {
-      return createSyncClient(spec, options);
-    } else {
-      return createAsyncClient(spec, options);
+  static class SourceResolver {
+    /**
+     * Provides final consumer ARN config.
+     *
+     * <p>{@link PipelineOptions} instance will overwrite anything given by {@link KinesisIO.Read}.
+     */
+    static @Nullable String resolveConsumerArn(KinesisIO.Read spec, PipelineOptions options) {
+      String streamName = Preconditions.checkArgumentNotNull(spec.getStreamName());
+      KinesisIOOptions sourceOptions = options.as(KinesisIOOptions.class);
+      Map<String, String> streamToArnMapping = sourceOptions.getKinesisIOConsumerArns();
+
+      String consumerArn;
+      if (streamToArnMapping.containsKey(streamName)) {
+        consumerArn = streamToArnMapping.get(streamName); // can resolve to null too
+      } else {
+        consumerArn = spec.getConsumerArn();
+      }
+
+      return consumerArn;
     }
-  }
 
-  static UnboundedReader<KinesisRecord> initReader(
-      KinesisIO.Read spec,
-      PipelineOptions options,
-      CheckpointGenerator checkpointGenerator,
-      KinesisSource source) {
-    String consumerArn = resolveConsumerArn(spec, options);
+    static AutoCloseable createClient(KinesisIO.Read spec, PipelineOptions options) {
+      String consumerArn = resolveConsumerArn(spec, options);
+      if (consumerArn == null) {
+        return createSyncClient(spec, options);
+      } else {
+        return createAsyncClient(spec, options);
+      }
+    }
 
-    if (consumerArn == null) {
-      LOG.info("Creating new reader using {}", checkpointGenerator);
-      return new KinesisReader(spec, createSyncClient(spec, options), checkpointGenerator, source);
-    } else {
-      LOG.info("Creating new EFO reader using {}", checkpointGenerator);
-      return new EFOKinesisReader(
-          spec, consumerArn, createAsyncClient(spec, options), checkpointGenerator, source);
+    static UnboundedReader<KinesisRecord> initReader(
+        KinesisIO.Read spec,
+        PipelineOptions options,
+        CheckpointGenerator checkpointGenerator,
+        KinesisSource source) {
+      String consumerArn = resolveConsumerArn(spec, options);
+
+      if (consumerArn == null) {
+        LOG.info("Creating new reader using {}", checkpointGenerator);
+        return new KinesisReader(
+            spec, createSyncClient(spec, options), checkpointGenerator, source);
+      } else {
+        LOG.info("Creating new EFO reader using {}", checkpointGenerator);
+        return new EFOKinesisReader(
+            spec, consumerArn, createAsyncClient(spec, options), checkpointGenerator, source);
+      }
+    }
+
+    static SimplifiedKinesisClient createSyncClient(KinesisIO.Read spec, PipelineOptions options) {
+      AwsOptions awsOptions = options.as(AwsOptions.class);
+      Supplier<KinesisClient> kinesisSupplier;
+      Supplier<CloudWatchClient> cloudWatchSupplier;
+      if (spec.getAWSClientsProvider() != null) {
+        kinesisSupplier =
+            Preconditions.checkArgumentNotNull(spec.getAWSClientsProvider())::getKinesisClient;
+        cloudWatchSupplier =
+            Preconditions.checkArgumentNotNull(spec.getAWSClientsProvider())::getCloudWatchClient;
+      } else {
+        ClientConfiguration config =
+            Preconditions.checkArgumentNotNull(spec.getClientConfiguration());
+        kinesisSupplier = () -> buildClient(awsOptions, KinesisClient.builder(), config);
+        cloudWatchSupplier = () -> buildClient(awsOptions, CloudWatchClient.builder(), config);
+      }
+      return new SimplifiedKinesisClient(
+          kinesisSupplier, cloudWatchSupplier, spec.getRequestRecordsLimit());
+    }
+
+    static KinesisAsyncClient createAsyncClient(KinesisIO.Read spec, PipelineOptions options) {
+      AwsOptions awsOptions = options.as(AwsOptions.class);
+      ClientBuilderFactory builderFactory = ClientBuilderFactory.getFactory(awsOptions);
+      KinesisAsyncClientBuilder adjustedBuilder =
+          KinesisClientUtil.adjustKinesisClientBuilder(KinesisAsyncClient.builder());
+      return builderFactory
+          .create(adjustedBuilder, checkArgumentNotNull(spec.getClientConfiguration()), awsOptions)
+          .build();
     }
   }
 }

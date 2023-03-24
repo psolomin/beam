@@ -27,7 +27,7 @@ public class KinesisSourceTest {
   public void testConsumerArnNotPassed() {
     KinesisIO.Read readSpec = KinesisIO.read().withStreamName("stream-xxx");
     KinesisIOOptions options = createIOOptions();
-    assertThat(KinesisSource.resolveConsumerArn(readSpec, options)).isNull();
+    assertThat(KinesisSource.SourceResolver.resolveConsumerArn(readSpec, options)).isNull();
   }
 
   @Test
@@ -36,7 +36,8 @@ public class KinesisSourceTest {
         KinesisIO.read().withStreamName("stream-xxx").withConsumerArn("arn::consumer-yyy");
 
     KinesisIOOptions options = createIOOptions();
-    assertThat(KinesisSource.resolveConsumerArn(readSpec, options)).isEqualTo("arn::consumer-yyy");
+    assertThat(KinesisSource.SourceResolver.resolveConsumerArn(readSpec, options))
+        .isEqualTo("arn::consumer-yyy");
   }
 
   @Test
@@ -45,7 +46,8 @@ public class KinesisSourceTest {
 
     KinesisIOOptions options =
         createIOOptions("--kinesisIOConsumerArns={\"stream-xxx\": \"arn-01\"}");
-    assertThat(KinesisSource.resolveConsumerArn(readSpec, options)).isEqualTo("arn-01");
+    assertThat(KinesisSource.SourceResolver.resolveConsumerArn(readSpec, options))
+        .isEqualTo("arn-01");
   }
 
   @Test
@@ -53,7 +55,7 @@ public class KinesisSourceTest {
     KinesisIO.Read readSpec = KinesisIO.read().withStreamName("stream-xxx");
     KinesisIOOptions options =
         createIOOptions("--kinesisIOConsumerArns={\"stream-01\": \"arn-01\"}");
-    assertThat(KinesisSource.resolveConsumerArn(readSpec, options)).isNull();
+    assertThat(KinesisSource.SourceResolver.resolveConsumerArn(readSpec, options)).isNull();
   }
 
   @Test
@@ -63,7 +65,8 @@ public class KinesisSourceTest {
 
     KinesisIOOptions options =
         createIOOptions("--kinesisIOConsumerArns={\"stream-xxx\": \"arn-01\"}");
-    assertThat(KinesisSource.resolveConsumerArn(readSpec, options)).isEqualTo("arn-01");
+    assertThat(KinesisSource.SourceResolver.resolveConsumerArn(readSpec, options))
+        .isEqualTo("arn-01");
   }
 
   @Test
@@ -72,6 +75,6 @@ public class KinesisSourceTest {
         KinesisIO.read().withStreamName("stream-xxx").withConsumerArn("arn-ignored");
 
     KinesisIOOptions options = createIOOptions("--kinesisIOConsumerArns={\"stream-xxx\": null}");
-    assertThat(KinesisSource.resolveConsumerArn(readSpec, options)).isNull();
+    assertThat(KinesisSource.SourceResolver.resolveConsumerArn(readSpec, options)).isNull();
   }
 }
