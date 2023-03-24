@@ -75,26 +75,12 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
    */
   @Override
   public List<KinesisSource> split(int desiredNumSplits, PipelineOptions options) throws Exception {
-    String consumerArn = resolveConsumerArn(spec, options);
     List<KinesisSource> sources = newArrayList();
-    if (consumerArn == null) {
-      try (SimplifiedKinesisClient client = createClient(options)) {
-        KinesisReaderCheckpoint checkpoint = checkpointGenerator.generate(client);
-
-        for (KinesisReaderCheckpoint partition : checkpoint.splitInto(desiredNumSplits)) {
-          sources.add(new KinesisSource(spec, new StaticCheckpointGenerator(partition)));
-        }
-        return sources;
-      }
-    } else {
-      try (KinesisAsyncClient kinesis = createAsyncClient(options)) {
-        KinesisReaderCheckpoint checkpoint = checkpointGenerator.generate(kinesis);
-        for (KinesisReaderCheckpoint partition : checkpoint.splitInto(desiredNumSplits)) {
-          sources.add(new KinesisSource(spec, new StaticCheckpointGenerator(partition)));
-        }
-        return sources;
-      }
+    KinesisReaderCheckpoint checkpoint = initCheckpoint(options);
+    for (KinesisReaderCheckpoint partition : checkpoint.splitInto(desiredNumSplits)) {
+      sources.add(new KinesisSource(spec, new StaticCheckpointGenerator(partition)));
     }
+    return sources;
   }
 
   @Override
@@ -175,5 +161,18 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
     }
 
     return consumerArn;
+  }
+
+  KinesisReaderCheckpoint initCheckpoint(PipelineOptions options) throws Exception {
+    String consumerArn = resolveConsumerArn(spec, options);
+    if (consumerArn == null) {
+      try (SimplifiedKinesisClient client = createClient(options)) {
+        return checkpointGenerator.generate(client);
+      }
+    } else {
+      try (KinesisAsyncClient kinesis = createAsyncClient(options)) {
+        return checkpointGenerator.generate(kinesis);
+      }
+    }
   }
 }
