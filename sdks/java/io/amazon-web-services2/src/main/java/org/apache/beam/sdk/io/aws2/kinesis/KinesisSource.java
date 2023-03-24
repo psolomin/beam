@@ -104,7 +104,7 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
     return KinesisRecordCoder.of();
   }
 
-  static SimplifiedKinesisClient createClient(KinesisIO.Read spec, PipelineOptions options) {
+  static SimplifiedKinesisClient createSyncClient(KinesisIO.Read spec, PipelineOptions options) {
     AwsOptions awsOptions = options.as(AwsOptions.class);
     Supplier<KinesisClient> kinesisSupplier;
     Supplier<CloudWatchClient> cloudWatchSupplier;
@@ -123,8 +123,7 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
         kinesisSupplier, cloudWatchSupplier, spec.getRequestRecordsLimit());
   }
 
-  static KinesisAsyncClient createAsyncClient(
-      KinesisIO.Read spec, PipelineOptions options) {
+  static KinesisAsyncClient createAsyncClient(KinesisIO.Read spec, PipelineOptions options) {
     AwsOptions awsOptions = options.as(AwsOptions.class);
     ClientBuilderFactory builderFactory = ClientBuilderFactory.getFactory(awsOptions);
     KinesisAsyncClientBuilder adjustedBuilder =
@@ -156,15 +155,17 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
 
   KinesisReaderCheckpoint initCheckpoint(KinesisIO.Read spec, PipelineOptions options)
       throws Exception {
+    try (AutoCloseable client = createClient(spec, options)) {
+      return checkpointGenerator.generate(client);
+    }
+  }
+
+  static AutoCloseable createClient(KinesisIO.Read spec, PipelineOptions options) {
     String consumerArn = resolveConsumerArn(spec, options);
     if (consumerArn == null) {
-      try (SimplifiedKinesisClient client = createClient(spec, options)) {
-        return checkpointGenerator.generate(client);
-      }
+      return createSyncClient(spec, options);
     } else {
-      try (KinesisAsyncClient kinesis = createAsyncClient(spec, options)) {
-        return checkpointGenerator.generate(kinesis);
-      }
+      return createAsyncClient(spec, options);
     }
   }
 
@@ -172,13 +173,12 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
       KinesisIO.Read spec,
       PipelineOptions options,
       CheckpointGenerator checkpointGenerator,
-      KinesisSource source
-  ) {
+      KinesisSource source) {
     String consumerArn = resolveConsumerArn(spec, options);
 
     if (consumerArn == null) {
       LOG.info("Creating new reader using {}", checkpointGenerator);
-      return new KinesisReader(spec, createClient(spec, options), checkpointGenerator, source);
+      return new KinesisReader(spec, createSyncClient(spec, options), checkpointGenerator, source);
     } else {
       LOG.info("Creating new EFO reader using {}", checkpointGenerator);
       return new EFOKinesisReader(
