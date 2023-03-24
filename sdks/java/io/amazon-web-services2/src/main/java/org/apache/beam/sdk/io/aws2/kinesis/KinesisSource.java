@@ -76,7 +76,7 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
   @Override
   public List<KinesisSource> split(int desiredNumSplits, PipelineOptions options) throws Exception {
     List<KinesisSource> sources = newArrayList();
-    KinesisReaderCheckpoint checkpoint = initCheckpoint(options);
+    KinesisReaderCheckpoint checkpoint = initCheckpoint(spec, options);
     for (KinesisReaderCheckpoint partition : checkpoint.splitInto(desiredNumSplits)) {
       sources.add(new KinesisSource(spec, new StaticCheckpointGenerator(partition)));
     }
@@ -91,17 +91,7 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
     if (checkpointMark != null) {
       checkpointGenerator = new StaticCheckpointGenerator(checkpointMark);
     }
-
-    String consumerArn = resolveConsumerArn(spec, options);
-
-    if (consumerArn == null) {
-      LOG.info("Creating new reader using {}", checkpointGenerator);
-      return new KinesisReader(spec, createClient(options), checkpointGenerator, this);
-    } else {
-      LOG.info("Creating new EFO reader using {}", checkpointGenerator);
-      return new EFOKinesisReader(
-          spec, consumerArn, createAsyncClient(options), checkpointGenerator, this);
-    }
+    return initReader(spec, options, checkpointGenerator, this);
   }
 
   @Override
@@ -114,7 +104,7 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
     return KinesisRecordCoder.of();
   }
 
-  private SimplifiedKinesisClient createClient(PipelineOptions options) {
+  static SimplifiedKinesisClient createClient(KinesisIO.Read spec, PipelineOptions options) {
     AwsOptions awsOptions = options.as(AwsOptions.class);
     Supplier<KinesisClient> kinesisSupplier;
     Supplier<CloudWatchClient> cloudWatchSupplier;
@@ -133,7 +123,8 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
         kinesisSupplier, cloudWatchSupplier, spec.getRequestRecordsLimit());
   }
 
-  private KinesisAsyncClient createAsyncClient(PipelineOptions options) {
+  static KinesisAsyncClient createAsyncClient(
+      KinesisIO.Read spec, PipelineOptions options) {
     AwsOptions awsOptions = options.as(AwsOptions.class);
     ClientBuilderFactory builderFactory = ClientBuilderFactory.getFactory(awsOptions);
     KinesisAsyncClientBuilder adjustedBuilder =
@@ -163,16 +154,35 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
     return consumerArn;
   }
 
-  KinesisReaderCheckpoint initCheckpoint(PipelineOptions options) throws Exception {
+  KinesisReaderCheckpoint initCheckpoint(KinesisIO.Read spec, PipelineOptions options)
+      throws Exception {
     String consumerArn = resolveConsumerArn(spec, options);
     if (consumerArn == null) {
-      try (SimplifiedKinesisClient client = createClient(options)) {
+      try (SimplifiedKinesisClient client = createClient(spec, options)) {
         return checkpointGenerator.generate(client);
       }
     } else {
-      try (KinesisAsyncClient kinesis = createAsyncClient(options)) {
+      try (KinesisAsyncClient kinesis = createAsyncClient(spec, options)) {
         return checkpointGenerator.generate(kinesis);
       }
+    }
+  }
+
+  static UnboundedReader<KinesisRecord> initReader(
+      KinesisIO.Read spec,
+      PipelineOptions options,
+      CheckpointGenerator checkpointGenerator,
+      KinesisSource source
+  ) {
+    String consumerArn = resolveConsumerArn(spec, options);
+
+    if (consumerArn == null) {
+      LOG.info("Creating new reader using {}", checkpointGenerator);
+      return new KinesisReader(spec, createClient(spec, options), checkpointGenerator, source);
+    } else {
+      LOG.info("Creating new EFO reader using {}", checkpointGenerator);
+      return new EFOKinesisReader(
+          spec, consumerArn, createAsyncClient(spec, options), checkpointGenerator, source);
     }
   }
 }
