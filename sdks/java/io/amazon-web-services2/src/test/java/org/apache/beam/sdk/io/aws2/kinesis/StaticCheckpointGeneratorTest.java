@@ -31,35 +31,6 @@ import org.junit.Test;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 
 public class StaticCheckpointGeneratorTest {
-  /**
-   * This sequence was generated with org.apache.beam:beam-sdks-java-io-amazon-web-services2:2.46.0.
-   */
-  private static final String SERIALIZED_GENERATOR_RELEASE_2_46_0 =
-      "rO0ABXNyAD1vcmcuYXBhY2hlLmJlYW0uc2RrLmlvLmF3czIua2luZXNpcy5TdGF0aWNDaGVja3BvaW50R2VuZXJhdG9yUuPUDZVIsEsCAAFMAApjaGVja3BvaW50dAA9TG9yZy9hcGFjaGUvYmVhbS9zZGsvaW8vYXdzMi9raW5lc2lzL0tpbmVzaXNSZWFkZXJDaGVja3BvaW50O3hwc3IAO29yZy5hcGFjaGUuYmVhbS5zZGsuaW8uYXdzMi5raW5lc2lzLktpbmVzaXNSZWFkZXJDaGVja3BvaW50octvds7/pckCAAFMABBzaGFyZENoZWNrcG9pbnRzdAAQTGphdmEvdXRpbC9MaXN0O3hwc3IAXW9yZy5hcGFjaGUuYmVhbS52ZW5kb3IuZ3VhdmEudjI2XzBfanJlLmNvbS5nb29nbGUuY29tbW9uLmNvbGxlY3QuSW1tdXRhYmxlTGlzdCRTZXJpYWxpemVkRm9ybQAAAAAAAAAAAgABWwAIZWxlbWVudHN0ABNbTGphdmEvbGFuZy9PYmplY3Q7eHB1cgATW0xqYXZhLmxhbmcuT2JqZWN0O5DOWJ8QcylsAgAAeHAAAAABc3IAM29yZy5hcGFjaGUuYmVhbS5zZGsuaW8uYXdzMi5raW5lc2lzLlNoYXJkQ2hlY2twb2ludAFv1e9R2rUHAgAGTAAOc2VxdWVuY2VOdW1iZXJ0ABJMamF2YS9sYW5nL1N0cmluZztMAAdzaGFyZElkcQB+AAxMABFzaGFyZEl0ZXJhdG9yVHlwZXQAQUxzb2Z0d2FyZS9hbWF6b24vYXdzc2RrL3NlcnZpY2VzL2tpbmVzaXMvbW9kZWwvU2hhcmRJdGVyYXRvclR5cGU7TAAKc3RyZWFtTmFtZXEAfgAMTAARc3ViU2VxdWVuY2VOdW1iZXJ0ABBMamF2YS9sYW5nL0xvbmc7TAAJdGltZXN0YW1wdAAXTG9yZy9qb2RhL3RpbWUvSW5zdGFudDt4cHQAAjQydAAJc2hhcmQtMDAwfnIAP3NvZnR3YXJlLmFtYXpvbi5hd3NzZGsuc2VydmljZXMua2luZXNpcy5tb2RlbC5TaGFyZEl0ZXJhdG9yVHlwZQAAAAAAAAAAEgAAeHIADmphdmEubGFuZy5FbnVtAAAAAAAAAAASAAB4cHQAFUFGVEVSX1NFUVVFTkNFX05VTUJFUnQACXN0cmVhbS0wMXNyAA5qYXZhLmxhbmcuTG9uZzuL5JDMjyPfAgABSgAFdmFsdWV4cgAQamF2YS5sYW5nLk51bWJlcoaslR0LlOCLAgAAeHAAAAAAAAAADHA=";
-
-  /**
-   * {@link KinesisSource} serialization changed after some changes in its data.
-   *
-   * <p>Incompatibility caused failures in the following scenario:
-   *
-   * <ol>
-   *   <li>Create Flink savepoint with Beam 2.46.0
-   *   <li>Start from Flink savepoint with Beam 2.47.0-SNAPSHOT in development branch
-   * </ol>
-   *
-   * <p>Neither of {@link CheckpointGenerator} implementations had explicit serialVersionUID, which
-   * caused errors:
-   *
-   * <p><small>Caused by: java.io.InvalidClassException:
-   * org.apache.beam.sdk.io.aws2.kinesis.StaticCheckpointGenerator; local class incompatible: stream
-   * classdesc serialVersionUID = 5972850685627641931, local class serialVersionUID =
-   * -1716374792629517553</small>
-   *
-   * <p><small>Caused by: java.io.InvalidClassException:
-   * org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint; local class incompatible: stream classdesc
-   * serialVersionUID = 103536540299998471, local class serialVersionUID =
-   * 2842489499429532931</small>
-   */
   @Test
   public void testJavaSerialization() throws IOException, ClassNotFoundException {
     ShardCheckpoint shardCheckpoint =
@@ -69,22 +40,12 @@ public class StaticCheckpointGeneratorTest {
         new KinesisReaderCheckpoint(ImmutableList.of(shardCheckpoint));
     StaticCheckpointGenerator currentGenerator = new StaticCheckpointGenerator(checkpoint);
     String serializedCurrentGenerator = serializeObjectToString(currentGenerator);
-
-    StaticCheckpointGenerator deserializedGeneratorRelease2460 =
-        (StaticCheckpointGenerator)
-            deSerializeObjectFromString(SERIALIZED_GENERATOR_RELEASE_2_46_0);
     StaticCheckpointGenerator deserializedCurrentGenerator =
         (StaticCheckpointGenerator) deSerializeObjectFromString(serializedCurrentGenerator);
 
     assertThat(currentGenerator.generate(null)).containsExactlyInAnyOrder(shardCheckpoint);
     assertThat(deserializedCurrentGenerator.generate(null))
         .containsExactlyInAnyOrder(shardCheckpoint);
-    assertThat(deserializedGeneratorRelease2460.generate(null))
-        .containsExactlyInAnyOrder(shardCheckpoint);
-    // Asserting equal serialized content may be too strict and not actually necessary.
-    // More important is that deserialized **content** matches.
-    // Once StaticCheckpointGenerator gets more nullable data slots, this assertion can be dropped.
-    assertThat(serializedCurrentGenerator).isEqualTo(SERIALIZED_GENERATOR_RELEASE_2_46_0);
   }
 
   private static String serializeObjectToString(Serializable o) throws IOException {

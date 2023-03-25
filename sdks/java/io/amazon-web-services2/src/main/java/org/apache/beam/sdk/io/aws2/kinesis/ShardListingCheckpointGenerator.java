@@ -35,7 +35,7 @@ import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
 
 class ShardListingCheckpointGenerator implements CheckpointGenerator {
-  private static final Logger LOG = LoggerFactory.getLogger(ShardListingCheckpointGenerator.class);
+  private static final long serialVersionUID = 1L;
   private static final int shardListingTimeoutMs = 10_000;
 
   private final KinesisIO.Read spec;
@@ -47,8 +47,8 @@ class ShardListingCheckpointGenerator implements CheckpointGenerator {
   @Override
   public <ClientT> KinesisReaderCheckpoint generate(ClientT client)
       throws TransientKinesisException {
+    Logger logger = LoggerFactory.getLogger(ShardListingCheckpointGenerator.class);
     StartingPoint startingPoint = spec.getInitialPosition();
-
     if (client instanceof SimplifiedKinesisClient) {
       SimplifiedKinesisClient kinesis = (SimplifiedKinesisClient) client;
       List<Shard> streamShards =
@@ -56,7 +56,8 @@ class ShardListingCheckpointGenerator implements CheckpointGenerator {
               Preconditions.checkArgumentNotNull(spec.getStreamName()),
               Preconditions.checkArgumentNotNull(startingPoint));
 
-      LOG.info("Creating a checkpoint with following shards {} at {}", streamShards, startingPoint);
+      logger.info(
+          "Creating a checkpoint with following shards {} at {}", streamShards, startingPoint);
       return new KinesisReaderCheckpoint(
           streamShards.stream()
               .map(
@@ -69,7 +70,8 @@ class ShardListingCheckpointGenerator implements CheckpointGenerator {
     } else if (client instanceof KinesisAsyncClient) {
       KinesisAsyncClient kinesis = (KinesisAsyncClient) client;
       List<ShardCheckpoint> streamShards = generateShardsCheckpoints(spec, kinesis);
-      LOG.info("Creating a checkpoint with following shards {} at {}", streamShards, startingPoint);
+      logger.info(
+          "Creating a checkpoint with following shards {} at {}", streamShards, startingPoint);
       return new KinesisReaderCheckpoint(streamShards);
     } else {
       throw new IllegalStateException(String.format("Unknown type of client %s", client));
@@ -97,17 +99,18 @@ class ShardListingCheckpointGenerator implements CheckpointGenerator {
 
   private static ListShardsResponse tryListingShards(
       ListShardsRequest listShardsRequest, KinesisAsyncClient kinesis) {
+    Logger logger = LoggerFactory.getLogger(ShardListingCheckpointGenerator.class);
     try {
-      LOG.info("Starting ListShardsRequest {}", listShardsRequest);
+      logger.info("Starting ListShardsRequest {}", listShardsRequest);
       ListShardsResponse response =
           kinesis.listShards(listShardsRequest).get(shardListingTimeoutMs, TimeUnit.MILLISECONDS);
-      LOG.info("Shards found = {}", response.shards());
+      logger.info("Shards found = {}", response.shards());
       return response;
     } catch (ExecutionException | InterruptedException | TimeoutException e) {
-      LOG.error("Error listing shards {}", e.getMessage());
+      logger.error("Error listing shards {}", e.getMessage());
       throw new RuntimeException("Error listing shards. Stopping");
     } catch (Exception e) {
-      LOG.error("Unexpected error {}", e.getMessage());
+      logger.error("Unexpected error {}", e.getMessage());
       throw new RuntimeException("Error listing shards. Stopping");
     }
   }

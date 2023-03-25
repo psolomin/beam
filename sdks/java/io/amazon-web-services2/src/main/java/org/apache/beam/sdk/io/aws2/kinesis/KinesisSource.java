@@ -44,15 +44,7 @@ import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.kinesis.common.KinesisClientUtil;
 
 class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoint> {
-  /**
-   * Extracted from org.apache.beam:beam-sdks-java-io-amazon-web-services2:2.46.0.
-   *
-   * <pre>{@code
-   * serialver -classpath "target/dependency/*" \
-   *   org.apache.beam.sdk.io.aws2.kinesis.KinesisSource
-   * }</pre>
-   */
-  private static final long serialVersionUID = -6683426380627845784L;
+  private static final long serialVersionUID = 1L;
 
   private static final Logger LOG = LoggerFactory.getLogger(KinesisSource.class);
 

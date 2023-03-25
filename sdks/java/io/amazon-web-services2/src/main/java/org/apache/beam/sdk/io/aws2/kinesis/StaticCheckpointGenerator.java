@@ -20,15 +20,7 @@ package org.apache.beam.sdk.io.aws2.kinesis;
 import static org.apache.beam.vendor.guava.v26_0_jre.com.google.common.base.Preconditions.checkNotNull;
 
 class StaticCheckpointGenerator implements CheckpointGenerator {
-  /**
-   * Extracted from org.apache.beam:beam-sdks-java-io-amazon-web-services2:2.46.0.
-   *
-   * <pre>{@code
-   * serialver -classpath "..<dependencies dir>/*" \
-   *     org.apache.beam.sdk.io.aws2.kinesis.StaticCheckpointGenerator
-   * }</pre>
-   */
-  private static final long serialVersionUID = 5972850685627641931L;
+  private static final long serialVersionUID = 1L;
 
   private final KinesisReaderCheckpoint checkpoint;
 
