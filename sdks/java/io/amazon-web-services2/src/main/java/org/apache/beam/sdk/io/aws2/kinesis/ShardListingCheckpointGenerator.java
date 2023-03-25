@@ -24,7 +24,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
+import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.util.Preconditions;
+import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -76,6 +78,12 @@ class ShardListingCheckpointGenerator implements CheckpointGenerator {
     } else {
       throw new IllegalStateException(String.format("Unknown type of client %s", client));
     }
+  }
+
+  @Override
+  public KinesisReaderCheckpoint generate(KinesisIO.Read spec, PipelineOptions options)
+      throws TransientKinesisException {
+    return new KinesisReaderCheckpoint(ImmutableList.of());
   }
 
   private static List<ShardCheckpoint> generateShardsCheckpoints(

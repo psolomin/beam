@@ -18,6 +18,7 @@
 package org.apache.beam.sdk.io.aws2.kinesis;
 
 import java.io.Serializable;
+import org.apache.beam.sdk.options.PipelineOptions;
 
 /**
  * Used to generate checkpoint object on demand. How exactly the checkpoint is generated is up to
@@ -25,4 +26,7 @@ import java.io.Serializable;
  */
 interface CheckpointGenerator extends Serializable {
   <ClientT> KinesisReaderCheckpoint generate(ClientT client) throws TransientKinesisException;
+
+  KinesisReaderCheckpoint generate(KinesisIO.Read spec, PipelineOptions options)
+      throws TransientKinesisException;
 }

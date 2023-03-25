@@ -49,15 +49,15 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
   private static final Logger LOG = LoggerFactory.getLogger(KinesisSource.class);
 
   private final KinesisIO.Read spec;
-  private final CheckpointGenerator checkpointGenerator;
+  private final @Nullable KinesisReaderCheckpoint initialCheckpoint;
 
   KinesisSource(KinesisIO.Read read) {
-    this(read, new ShardListingCheckpointGenerator(read));
+    this(read, null);
   }
 
-  private KinesisSource(KinesisIO.Read spec, CheckpointGenerator initialCheckpoint) {
+  private KinesisSource(KinesisIO.Read spec, @Nullable KinesisReaderCheckpoint initialCheckpoint) {
     this.spec = checkNotNull(spec);
-    this.checkpointGenerator = checkNotNull(initialCheckpoint);
+    this.initialCheckpoint = initialCheckpoint;
   }
 
   /**
@@ -68,24 +68,21 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
   @Override
   public List<KinesisSource> split(int desiredNumSplits, PipelineOptions options) throws Exception {
     List<KinesisSource> sources = newArrayList();
-    KinesisReaderCheckpoint checkpoint =
-        SourceResolver.initCheckpoint(spec, options, checkpointGenerator);
+    KinesisReaderCheckpoint checkpoint = SourceResolver.initCheckpoint(spec, options);
     for (KinesisReaderCheckpoint partition : checkpoint.splitInto(desiredNumSplits)) {
-      sources.add(new KinesisSource(spec, new StaticCheckpointGenerator(partition)));
+      sources.add(new KinesisSource(spec, partition));
     }
     return sources;
   }
 
   @Override
-  public UnboundedReader<KinesisRecord> createReader(
-      PipelineOptions options, @Nullable KinesisReaderCheckpoint checkpointMark)
-      throws IOException {
+  public UnboundedReader<KinesisRecord> createReader(PipelineOptions options, @Nullable KinesisReaderCheckpoint checkpointMark) throws IOException {
     KinesisReaderCheckpoint initCheckpoint;
     if (checkpointMark != null) {
       initCheckpoint = checkpointMark;
     } else {
       try {
-        initCheckpoint = SourceResolver.initCheckpoint(spec, options, this.checkpointGenerator);
+        initCheckpoint = Preconditions.checkArgumentNotNull(this.initialCheckpoint);
       } catch (Exception e) {
         throw new IOException(e);
       }
@@ -124,11 +121,10 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
       return consumerArn;
     }
 
-    static KinesisReaderCheckpoint initCheckpoint(
-        KinesisIO.Read spec, PipelineOptions options, CheckpointGenerator checkpointGenerator)
+    static KinesisReaderCheckpoint initCheckpoint(KinesisIO.Read spec, PipelineOptions options)
         throws Exception {
       try (AutoCloseable client = SourceResolver.createClient(spec, options)) {
-        return checkpointGenerator.generate(client);
+        return new ShardListingCheckpointGenerator(spec).generate(client);
       }
     }
 
