@@ -22,9 +22,6 @@ import static org.apache.beam.sdk.io.aws2.kinesis.EFORecordsGenerators.eventWith
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
-import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
-import software.amazon.awssdk.services.kinesis.model.ShardFilter;
-import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.awssdk.services.kinesis.model.StartingPosition;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
@@ -40,13 +37,6 @@ class EFOHelpers {
 
   static KinesisIOOptions createIOOptions(String... args) {
     return PipelineOptionsFactory.fromArgs(args).as(KinesisIOOptions.class);
-  }
-
-  static ListShardsRequest listLatest() {
-    return ListShardsRequest.builder()
-        .streamName("stream-01")
-        .shardFilter(ShardFilter.builder().type(ShardFilterType.AT_LATEST).build())
-        .build();
   }
 
   static SubscribeToShardRequest subscribeLatest(String shardId) {
