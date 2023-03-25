@@ -55,7 +55,7 @@ class ShardListingCheckpointGenerator implements CheckpointGenerator {
     if (client instanceof KinesisClient) {
       KinesisClient kinesis = (KinesisClient) client;
       List<Shard> streamShards =
-          SimplifiedKinesisClient.listShardsAtPoint(
+          ShardListingUtils.listShardsAtPoint(
               kinesis,
               Preconditions.checkArgumentNotNull(spec.getStreamName()),
               Preconditions.checkArgumentNotNull(startingPoint));
