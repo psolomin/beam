@@ -115,15 +115,18 @@ class SimplifiedKinesisClient implements AutoCloseable {
                 .shardIterator());
   }
 
-  public List<Shard> listShardsAtPoint(final String streamName, final StartingPoint startingPoint)
+  public static List<Shard> listShardsAtPoint(
+      KinesisClient kinesisClient, final String streamName, final StartingPoint startingPoint)
       throws TransientKinesisException {
     ShardFilter shardFilter =
-        wrapExceptions(() -> buildShardFilterForStartingPoint(streamName, startingPoint));
-    return listShards(streamName, shardFilter);
+        wrapExceptions(
+            () -> buildShardFilterForStartingPoint(kinesisClient, streamName, startingPoint));
+    return listShards(kinesisClient, streamName, shardFilter);
   }
 
-  private ShardFilter buildShardFilterForStartingPoint(
-      String streamName, StartingPoint startingPoint) throws IOException, InterruptedException {
+  private static ShardFilter buildShardFilterForStartingPoint(
+      KinesisClient kinesisClient, String streamName, StartingPoint startingPoint)
+      throws IOException, InterruptedException {
     InitialPositionInStream position = startingPoint.getPosition();
     switch (position) {
       case LATEST:
@@ -131,16 +134,18 @@ class SimplifiedKinesisClient implements AutoCloseable {
       case TRIM_HORIZON:
         return ShardFilter.builder().type(ShardFilterType.AT_TRIM_HORIZON).build();
       case AT_TIMESTAMP:
-        return buildShardFilterForTimestamp(streamName, startingPoint.getTimestamp());
+        return buildShardFilterForTimestamp(
+            kinesisClient, streamName, startingPoint.getTimestamp());
       default:
         throw new IllegalArgumentException(
             String.format("Unrecognized '%s' position to create shard filter with", position));
     }
   }
 
-  private ShardFilter buildShardFilterForTimestamp(
-      String streamName, Instant startingPointTimestamp) throws IOException, InterruptedException {
-    StreamDescriptionSummary streamDescription = describeStreamSummary(streamName);
+  private static ShardFilter buildShardFilterForTimestamp(
+      KinesisClient kinesisClient, String streamName, Instant startingPointTimestamp)
+      throws IOException, InterruptedException {
+    StreamDescriptionSummary streamDescription = describeStreamSummary(kinesisClient, streamName);
 
     Instant streamCreationTimestamp = TimeUtil.toJoda(streamDescription.streamCreationTimestamp());
     if (streamCreationTimestamp.isAfter(startingPointTimestamp)) {
@@ -163,7 +168,8 @@ class SimplifiedKinesisClient implements AutoCloseable {
     }
   }
 
-  private StreamDescriptionSummary describeStreamSummary(final String streamName)
+  private static StreamDescriptionSummary describeStreamSummary(
+      KinesisClient kinesisClient, final String streamName)
       throws IOException, InterruptedException {
     // DescribeStreamSummary has limits that can be hit fairly easily if we are attempting
     // to configure multiple KinesisIO inputs in the same account. Retry up to
@@ -182,7 +188,7 @@ class SimplifiedKinesisClient implements AutoCloseable {
         DescribeStreamSummaryRequest.builder().streamName(streamName).build();
     while (true) {
       try {
-        return kinesis.get().describeStreamSummary(request).streamDescriptionSummary();
+        return kinesisClient.describeStreamSummary(request).streamDescriptionSummary();
       } catch (LimitExceededException exc) {
         if (!BackOffUtils.next(sleeper, backoff)) {
           throw exc;
@@ -199,10 +205,11 @@ class SimplifiedKinesisClient implements AutoCloseable {
             .type(ShardFilterType.AFTER_SHARD_ID)
             .shardId(exclusiveStartShardId)
             .build();
-    return listShards(streamName, shardFilter);
+    return listShards(kinesis.get(), streamName, shardFilter);
   }
 
-  private List<Shard> listShards(final String streamName, final ShardFilter shardFilter)
+  private static List<Shard> listShards(
+      KinesisClient kinesisClient, final String streamName, final ShardFilter shardFilter)
       throws TransientKinesisException {
     return wrapExceptions(
         () -> {
@@ -220,7 +227,7 @@ class SimplifiedKinesisClient implements AutoCloseable {
               reqBuilder.streamName(streamName);
             }
 
-            ListShardsResponse response = kinesis.get().listShards(reqBuilder.build());
+            ListShardsResponse response = kinesisClient.listShards(reqBuilder.build());
             shardsBuilder.addAll(response.shards());
             currentNextToken = response.nextToken();
           } while (currentNextToken != null);
@@ -334,7 +341,7 @@ class SimplifiedKinesisClient implements AutoCloseable {
    * @throws ExpiredIteratorException - if iterator needs to be refreshed
    * @throws RuntimeException - in all other cases
    */
-  private <T> T wrapExceptions(Callable<T> callable) throws TransientKinesisException {
+  private static <T> T wrapExceptions(Callable<T> callable) throws TransientKinesisException {
     try {
       return callable.call();
     } catch (ExpiredIteratorException e) {

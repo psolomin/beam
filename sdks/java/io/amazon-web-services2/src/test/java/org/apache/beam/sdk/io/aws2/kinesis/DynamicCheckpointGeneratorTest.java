@@ -27,14 +27,19 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
+import software.amazon.awssdk.services.kinesis.KinesisClient;
+import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
+import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
+import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
 import software.amazon.kinesis.common.InitialPositionInStream;
 
 /** * */
 @RunWith(MockitoJUnitRunner.class)
 public class DynamicCheckpointGeneratorTest {
 
-  @Mock private SimplifiedKinesisClient kinesisClient;
+  @Mock private KinesisClient kinesisClient;
   private Shard shard1, shard2, shard3;
 
   @Before
@@ -51,11 +56,15 @@ public class DynamicCheckpointGeneratorTest {
         KinesisIO.read()
             .withStreamName("stream")
             .withInitialPositionInStream(InitialPositionInStream.LATEST);
-    String streamName = "stream";
-    StartingPoint startingPoint = new StartingPoint(InitialPositionInStream.LATEST);
-    when(kinesisClient.listShardsAtPoint(streamName, startingPoint)).thenReturn(shards);
-    ShardListingCheckpointGenerator underTest = new ShardListingCheckpointGenerator(readSpec);
+    when(kinesisClient.listShards(
+            ListShardsRequest.builder()
+                .streamName("stream")
+                .maxResults(1000)
+                .shardFilter(ShardFilter.builder().type(ShardFilterType.AT_LATEST).build())
+                .build()))
+        .thenReturn(ListShardsResponse.builder().shards(shards).build());
 
+    ShardListingCheckpointGenerator underTest = new ShardListingCheckpointGenerator(readSpec);
     KinesisReaderCheckpoint checkpoint = underTest.generate(kinesisClient);
 
     assertThat(checkpoint).hasSize(3);

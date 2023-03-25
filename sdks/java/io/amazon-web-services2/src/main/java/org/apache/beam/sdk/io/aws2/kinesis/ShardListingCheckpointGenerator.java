@@ -30,6 +30,7 @@ import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.Immutabl
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
 import software.amazon.awssdk.services.kinesis.model.Shard;
@@ -51,10 +52,11 @@ class ShardListingCheckpointGenerator implements CheckpointGenerator {
       throws TransientKinesisException {
     Logger logger = LoggerFactory.getLogger(ShardListingCheckpointGenerator.class);
     StartingPoint startingPoint = spec.getInitialPosition();
-    if (client instanceof SimplifiedKinesisClient) {
-      SimplifiedKinesisClient kinesis = (SimplifiedKinesisClient) client;
+    if (client instanceof KinesisClient) {
+      KinesisClient kinesis = (KinesisClient) client;
       List<Shard> streamShards =
-          kinesis.listShardsAtPoint(
+          SimplifiedKinesisClient.listShardsAtPoint(
+              kinesis,
               Preconditions.checkArgumentNotNull(spec.getStreamName()),
               Preconditions.checkArgumentNotNull(startingPoint));
 
@@ -123,10 +125,6 @@ class ShardListingCheckpointGenerator implements CheckpointGenerator {
     }
   }
 
-  /**
-   * FIXME: This repeats {@link SimplifiedKinesisClient#buildShardFilterForStartingPoint(String,
-   * StartingPoint)}. Merge 2 implementations into 1.
-   */
   private static ShardFilter buildFilter(KinesisIO.Read readSpec) {
     StartingPoint sp = checkArgumentNotNull(readSpec.getInitialPosition());
     switch (checkArgumentNotNull(sp.getPosition())) {

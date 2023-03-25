@@ -76,7 +76,9 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
   }
 
   @Override
-  public UnboundedReader<KinesisRecord> createReader(PipelineOptions options, @Nullable KinesisReaderCheckpoint checkpointMark) throws IOException {
+  public UnboundedReader<KinesisRecord> createReader(
+      PipelineOptions options, @Nullable KinesisReaderCheckpoint checkpointMark)
+      throws IOException {
     KinesisReaderCheckpoint initCheckpoint;
     if (checkpointMark != null) {
       initCheckpoint = checkpointMark;
@@ -146,7 +148,8 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
 
       if (consumerArn == null) {
         LOG.info("Creating new reader using {}", checkpointMark);
-        return new KinesisReader(spec, createSyncClient(spec, options), checkpointMark, source);
+        return new KinesisReader(
+            spec, createSimplifiedClient(spec, options), checkpointMark, source);
       } else {
         LOG.info("Creating new EFO reader using {}", checkpointMark);
         return new EFOKinesisReader(
@@ -154,7 +157,19 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
       }
     }
 
-    static SimplifiedKinesisClient createSyncClient(KinesisIO.Read spec, PipelineOptions options) {
+    static KinesisClient createSyncClient(KinesisIO.Read spec, PipelineOptions options) {
+      AwsOptions awsOptions = options.as(AwsOptions.class);
+      if (spec.getAWSClientsProvider() != null) {
+        return Preconditions.checkArgumentNotNull(spec.getAWSClientsProvider()).getKinesisClient();
+      } else {
+        ClientConfiguration config =
+            Preconditions.checkArgumentNotNull(spec.getClientConfiguration());
+        return buildClient(awsOptions, KinesisClient.builder(), config);
+      }
+    }
+
+    static SimplifiedKinesisClient createSimplifiedClient(
+        KinesisIO.Read spec, PipelineOptions options) {
       AwsOptions awsOptions = options.as(AwsOptions.class);
       Supplier<KinesisClient> kinesisSupplier;
       Supplier<CloudWatchClient> cloudWatchSupplier;
