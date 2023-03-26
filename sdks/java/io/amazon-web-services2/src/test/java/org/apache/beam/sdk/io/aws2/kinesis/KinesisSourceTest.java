@@ -20,9 +20,44 @@ package org.apache.beam.sdk.io.aws2.kinesis;
 import static org.apache.beam.sdk.io.aws2.kinesis.EFOHelpers.createIOOptions;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.apache.beam.sdk.io.UnboundedSource;
+import org.apache.beam.sdk.io.aws2.options.AwsOptions;
+import org.apache.beam.sdk.options.PipelineOptions;
+import org.apache.beam.sdk.options.PipelineOptionsFactory;
 import org.junit.Test;
+import org.testcontainers.shaded.com.google.common.collect.ImmutableList;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.kinesis.common.InitialPositionInStream;
 
 public class KinesisSourceTest {
+  private PipelineOptions opts() {
+    AwsOptions options = PipelineOptionsFactory.fromArgs().as(AwsOptions.class);
+    options.setAwsRegion(Region.AP_EAST_1);
+    return options;
+  }
+
+  @Test
+  public void testCreateReaderOfCorrectType() throws Exception {
+    KinesisIO.Read readSpec =
+        KinesisIO.read()
+            .withStreamName("stream-xxx")
+            .withInitialPositionInStream(InitialPositionInStream.TRIM_HORIZON);
+
+    KinesisIO.Read readSpecEFO =
+        KinesisIO.read()
+            .withStreamName("stream-xxx")
+            .withConsumerArn("consumer-aaa")
+            .withInitialPositionInStream(InitialPositionInStream.TRIM_HORIZON);
+
+    KinesisReaderCheckpoint initCheckpoint = new KinesisReaderCheckpoint(ImmutableList.of());
+    UnboundedSource.UnboundedReader<KinesisRecord> reader =
+        new KinesisSource(readSpec, initCheckpoint).createReader(opts(), null);
+    assertThat(reader).isInstanceOf(KinesisReader.class);
+    UnboundedSource.UnboundedReader<KinesisRecord> efoReader =
+        new KinesisSource(readSpecEFO, initCheckpoint).createReader(opts(), null);
+    assertThat(efoReader).isInstanceOf(EFOKinesisReader.class);
+  }
+
   @Test
   public void testConsumerArnNotPassed() {
     KinesisIO.Read readSpec = KinesisIO.read().withStreamName("stream-xxx");
