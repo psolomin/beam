@@ -181,7 +181,6 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
 
     static KinesisReaderCheckpoint generate(KinesisIO.Read spec, KinesisClient client)
         throws TransientKinesisException {
-      Logger logger = LoggerFactory.getLogger(KinesisSource.class);
       StartingPoint startingPoint = spec.getInitialPosition();
       List<Shard> streamShards =
           ShardListingUtils.listShardsAtPoint(
@@ -189,7 +188,7 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
               Preconditions.checkArgumentNotNull(spec.getStreamName()),
               Preconditions.checkArgumentNotNull(startingPoint));
 
-      logger.info(
+      LOG.info(
           "Creating a checkpoint with following shards {} at {}", streamShards, startingPoint);
       return new KinesisReaderCheckpoint(
           streamShards.stream()
