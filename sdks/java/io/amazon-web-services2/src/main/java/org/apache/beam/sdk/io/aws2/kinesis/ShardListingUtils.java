@@ -27,6 +27,8 @@ import org.apache.beam.sdk.util.Sleeper;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
 import org.joda.time.Duration;
 import org.joda.time.Instant;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkServiceException;
 import software.amazon.awssdk.core.internal.retry.SdkDefaultRetrySetting;
@@ -44,6 +46,8 @@ import software.amazon.awssdk.services.kinesis.model.StreamDescriptionSummary;
 import software.amazon.kinesis.common.InitialPositionInStream;
 
 class ShardListingUtils {
+  private static final Logger LOG = LoggerFactory.getLogger(ShardListingUtils.class);
+
   private static final int LIST_SHARDS_MAX_RESULTS = 1_000;
   private static final Duration
       SPACING_FOR_TIMESTAMP_LIST_SHARDS_REQUEST_TO_NOT_EXCEED_TRIM_HORIZON =
@@ -125,6 +129,7 @@ class ShardListingUtils {
         DescribeStreamSummaryRequest.builder().streamName(streamName).build();
     while (true) {
       try {
+        LOG.info("Executing request: {}", request);
         return kinesisClient.describeStreamSummary(request).streamDescriptionSummary();
       } catch (LimitExceededException exc) {
         if (!BackOffUtils.next(sleeper, backoff)) {
@@ -153,7 +158,9 @@ class ShardListingUtils {
               reqBuilder.streamName(streamName);
             }
 
-            ListShardsResponse response = kinesisClient.listShards(reqBuilder.build());
+            ListShardsRequest request = reqBuilder.build();
+            LOG.info("Executing request: {}", request);
+            ListShardsResponse response = kinesisClient.listShards(request);
             shardsBuilder.addAll(response.shards());
             currentNextToken = response.nextToken();
           } while (currentNextToken != null);

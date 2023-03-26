@@ -66,8 +66,9 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
   public List<KinesisSource> split(int desiredNumSplits, PipelineOptions options) throws Exception {
     List<KinesisSource> sources = newArrayList();
     KinesisReaderCheckpoint checkpoint;
+    // This op is pure sync - no need for KinesisAsyncClient here
     try (KinesisClient client = SourceResolver.createSyncClient(spec, options)) {
-      checkpoint = SourceResolver.generate(spec, client);
+      checkpoint = SourceResolver.buildInitCheckpoint(spec, client);
     }
     for (KinesisReaderCheckpoint partition : checkpoint.splitInto(desiredNumSplits)) {
       sources.add(new KinesisSource(spec, partition));
@@ -81,9 +82,11 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
       throws IOException {
     KinesisReaderCheckpoint initCheckpoint;
     if (checkpointMark != null) {
+      LOG.info("Got checkpoint mark {}", checkpointMark);
       initCheckpoint = checkpointMark;
     } else {
       try {
+        LOG.info("No checkpointMark specified, fall back to initial {}", this.initialCheckpoint);
         initCheckpoint = Preconditions.checkArgumentNotNull(this.initialCheckpoint);
       } catch (Exception e) {
         throw new IOException(e);
@@ -179,7 +182,7 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
           .build();
     }
 
-    static KinesisReaderCheckpoint generate(KinesisIO.Read spec, KinesisClient client)
+    static KinesisReaderCheckpoint buildInitCheckpoint(KinesisIO.Read spec, KinesisClient client)
         throws TransientKinesisException {
       StartingPoint startingPoint = spec.getInitialPosition();
       List<Shard> streamShards =
@@ -189,7 +192,7 @@ class KinesisSource extends UnboundedSource<KinesisRecord, KinesisReaderCheckpoi
               Preconditions.checkArgumentNotNull(startingPoint));
 
       LOG.info(
-          "Creating a checkpoint with following shards {} at {}", streamShards, startingPoint);
+          "Initializing a checkpoint with following shards {} at {}", streamShards, startingPoint);
       return new KinesisReaderCheckpoint(
           streamShards.stream()
               .map(
