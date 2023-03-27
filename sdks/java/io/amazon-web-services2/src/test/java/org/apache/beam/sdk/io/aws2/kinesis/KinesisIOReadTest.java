@@ -120,8 +120,8 @@ public class KinesisIOReadTest {
   public void testReadFromShards() {
     List<List<Record>> records = testRecords(SHARDS, SHARD_EVENTS);
     mockShards(SHARDS);
-    mockShardIterators(records);
-    mockRecords(records, 10);
+    mockShardIterators(client, records);
+    mockRecords(client, records, 10);
 
     readFromShards(identity(), concat(records));
   }
@@ -130,8 +130,8 @@ public class KinesisIOReadTest {
   public void testReadFromShardsWithLegacyProvider() {
     List<List<Record>> records = testRecords(SHARDS, SHARD_EVENTS);
     mockShards(SHARDS);
-    mockShardIterators(records);
-    mockRecords(records, 10);
+    mockShardIterators(client, records);
+    mockRecords(client, records, 10);
 
     MockClientBuilderFactory.set(p, KinesisClientBuilder.class, null);
     readFromShards(read -> read.withAWSClientsProvider(Provider.of(client)), concat(records));
@@ -218,14 +218,14 @@ public class KinesisIOReadTest {
     return req -> req != null && req.shardIterator().equals(id);
   }
 
-  private void mockShardIterators(List<List<Record>> data) {
+  static void mockShardIterators(KinesisClient client, List<List<Record>> data) {
     for (int id = 0; id < data.size(); id++) {
       when(client.getShardIterator(argThat(hasShardId(id))))
           .thenReturn(GetShardIteratorResponse.builder().shardIterator(id + ":0").build());
     }
   }
 
-  private void mockRecords(List<List<Record>> data, int limit) {
+  static void mockRecords(KinesisClient client, List<List<Record>> data, int limit) {
     BiFunction<List<Record>, String, GetRecordsResponse.Builder> resp =
         (recs, it) ->
             GetRecordsResponse.builder().millisBehindLatest(0L).records(recs).nextShardIterator(it);
@@ -250,7 +250,7 @@ public class KinesisIOReadTest {
         .thenReturn(ListShardsResponse.builder().shards(shards).build());
   }
 
-  private List<List<Record>> testRecords(int shards, int events) {
+  static List<List<Record>> testRecords(int shards, int events) {
     final Instant now = DateTime.now().toInstant();
     Function<Integer, List<Record>> dataStream =
         shard -> range(0, events).mapToObj(off -> record(now, shard, off)).collect(toList());
