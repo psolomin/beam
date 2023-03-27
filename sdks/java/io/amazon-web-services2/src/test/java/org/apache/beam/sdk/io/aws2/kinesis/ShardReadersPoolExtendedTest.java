@@ -78,25 +78,52 @@ public class ShardReadersPoolExtendedTest {
         .containsExactlyInAnyOrder(
             new ShardCheckpoint(STREAM, SHARD_0, ShardIteratorType.AFTER_SEQUENCE_NUMBER, "0", 0L));
 
-    // record with seq num = 0 is skipped:
-    CustomOptional<KinesisRecord> record1 = shardReadersPool.nextRecord();
-    assertThat(record1.isPresent()).isTrue();
-    assertThat(record1.get().getSequenceNumber()).isEqualTo("1");
-    KinesisReaderCheckpoint checkpoint1 = shardReadersPool.getCheckpointMark();
-    assertThat(checkpoint1.iterator())
-        .containsExactlyInAnyOrder(
-            new ShardCheckpoint(STREAM, SHARD_0, ShardIteratorType.AFTER_SEQUENCE_NUMBER, "1", 0L));
+    // record with seq num = 0 is skipped
+    for (int i = 1; i < 3L; i++) {
+      KinesisRecord kinesisRecord = shardReadersPool.nextRecord().get();
+      assertThat(kinesisRecord.getSequenceNumber()).isEqualTo(String.valueOf(i));
+      assertThat(kinesisRecord.getSubSequenceNumber()).isEqualTo(0L);
+      assertThat(shardReadersPool.getCheckpointMark())
+              .containsExactlyInAnyOrder(
+                      new ShardCheckpoint(
+                              STREAM, SHARD_0, ShardIteratorType.AFTER_SEQUENCE_NUMBER, String.valueOf(i), 0L));
+    }
+    assertThat(shardReadersPool.nextRecord().isPresent()).isFalse();
+  }
 
-    // second record:
-    CustomOptional<KinesisRecord> record2 = shardReadersPool.nextRecord();
-    assertThat(record2.isPresent()).isTrue();
-    assertThat(record2.get().getSequenceNumber()).isEqualTo("2");
-    KinesisReaderCheckpoint checkpoint2 = shardReadersPool.getCheckpointMark();
-    assertThat(checkpoint2.iterator())
-        .containsExactlyInAnyOrder(
-            new ShardCheckpoint(STREAM, SHARD_0, ShardIteratorType.AFTER_SEQUENCE_NUMBER, "2", 0L));
+  /**
+   * This case may happen when {@link EFOShardSubscribersPool} stores its checkpoints.
+   *
+   * <p>{@link EFOShardSubscribersPool} state re-sets subSequenceNumber only when next record with
+   * zero sub-sequence number arrives. Heartbeat records don't reset internal subSequenceNumber.
+   *
+   * @throws TransientKinesisException
+   */
+  @Test
+  public void testNextRecordReturnsNonAggregatedRecordsIfSeqNumIsPositive()
+      throws TransientKinesisException {
+    KinesisReaderCheckpoint initialCheckpoint =
+        new KinesisReaderCheckpoint(
+            ImmutableList.of(
+                new ShardCheckpoint(
+                    STREAM, SHARD_0, ShardIteratorType.AFTER_SEQUENCE_NUMBER, "0", 125L)));
+    shardReadersPool = initPool(initialCheckpoint);
 
-    // nothing else to fetch:
+    List<List<Record>> records = testRecords(1, 4);
+    mockShardIterators(kinesis, records);
+    mockRecords(kinesis, records, 4);
+
+    shardReadersPool.start();
+
+    for (int i = 1; i < 4L; i++) {
+      KinesisRecord kinesisRecord = shardReadersPool.nextRecord().get();
+      assertThat(kinesisRecord.getSequenceNumber()).isEqualTo(String.valueOf(i));
+      assertThat(kinesisRecord.getSubSequenceNumber()).isEqualTo(0L);
+      assertThat(shardReadersPool.getCheckpointMark())
+          .containsExactlyInAnyOrder(
+              new ShardCheckpoint(
+                  STREAM, SHARD_0, ShardIteratorType.AFTER_SEQUENCE_NUMBER, String.valueOf(i), 0L));
+    }
     assertThat(shardReadersPool.nextRecord().isPresent()).isFalse();
   }
 
@@ -145,6 +172,34 @@ public class ShardReadersPoolExtendedTest {
     assertThat(record4.isPresent()).isTrue();
     assertThat(record4.get().getSequenceNumber()).isEqualTo("0");
     assertThat(record4.get().getSubSequenceNumber()).isEqualTo(3L);
+  }
+
+  @Test
+  public void testNextRecordReturnsDeAggregatedRecordsWhenStartedAtSeqNum()
+      throws TransientKinesisException {
+    KinesisReaderCheckpoint initialCheckpoint =
+        new KinesisReaderCheckpoint(
+            ImmutableList.of(
+                new ShardCheckpoint(
+                    STREAM, SHARD_0, ShardIteratorType.AT_SEQUENCE_NUMBER, "0", 2L)));
+
+    List<List<Record>> records = testAggregatedRecords(1, 6);
+    mockShardIterators(kinesis, records);
+    mockRecords(kinesis, records, 1);
+    shardReadersPool = initPool(initialCheckpoint);
+    shardReadersPool.start();
+
+    // before fetching anything:
+    KinesisReaderCheckpoint checkpoint0 = shardReadersPool.getCheckpointMark();
+    assertThat(checkpoint0.iterator())
+        .containsExactlyInAnyOrder(
+            new ShardCheckpoint(STREAM, SHARD_0, ShardIteratorType.AT_SEQUENCE_NUMBER, "0", 2L));
+
+    // 4th record:
+    CustomOptional<KinesisRecord> record4 = shardReadersPool.nextRecord();
+    assertThat(record4.isPresent()).isTrue();
+    assertThat(record4.get().getSequenceNumber()).isEqualTo("0");
+    assertThat(record4.get().getSubSequenceNumber()).isEqualTo(2L);
   }
 
   @After

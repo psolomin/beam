@@ -166,6 +166,18 @@ class Helpers {
         .build();
   }
 
+  static SubscribeToShardRequest subscribeAtSeqNumber(String shardId, String seqNumber) {
+    return SubscribeToShardRequest.builder()
+        .consumerARN("consumer-01")
+        .shardId(shardId)
+        .startingPosition(
+            StartingPosition.builder()
+                .type(ShardIteratorType.AT_SEQUENCE_NUMBER)
+                .sequenceNumber(seqNumber)
+                .build())
+        .build();
+  }
+
   static SubscribeToShardRequest subscribeTrimHorizon(String shardId) {
     return SubscribeToShardRequest.builder()
         .consumerARN("consumer-01")

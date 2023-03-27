@@ -277,7 +277,7 @@ class EFOShardSubscribersPool {
     EFOShardSubscriber subscriber =
         new EFOShardSubscriber(
             this, cp.getShardId(), read, consumerArn, kinesis, onErrorCoolDownMs);
-    StartingPosition startingPosition = cp.toStartingPosition();
+    StartingPosition startingPosition = cp.toEFOStartingPosition();
     if (subscriptionError == null) {
       subscriber.subscribe(startingPosition).whenCompleteAsync(errorHandler);
     }
@@ -372,27 +372,22 @@ class EFOShardSubscribersPool {
 
     void update(EventRecords eventRecords) {
       sequenceNumber = checkNotNull(eventRecords.event.continuationSequenceNumber());
-      subSequenceNumber = 0L;
       subscriber.ackEvent();
     }
 
+    /**
+     * Follows semantics of {@link ShardCheckpoint#moveAfter(KinesisRecord)}, e.g. it will always
+     * persist {@link ShardIteratorType#AFTER_SEQUENCE_NUMBER} as soon as some record gets its
+     * {@link #sequenceNumber} registered.
+     */
     ShardCheckpoint toCheckpoint() {
       if (sequenceNumber != null) {
-        if (subSequenceNumber != 0L) {
-          return new ShardCheckpoint(
-              initCheckpoint.getStreamName(),
-              initCheckpoint.getShardId(),
-              ShardIteratorType.AT_SEQUENCE_NUMBER,
-              sequenceNumber,
-              subSequenceNumber);
-        } else {
-          return new ShardCheckpoint(
-              initCheckpoint.getStreamName(),
-              initCheckpoint.getShardId(),
-              ShardIteratorType.AFTER_SEQUENCE_NUMBER,
-              sequenceNumber,
-              subSequenceNumber);
-        }
+        return new ShardCheckpoint(
+            initCheckpoint.getStreamName(),
+            initCheckpoint.getShardId(),
+            ShardIteratorType.AFTER_SEQUENCE_NUMBER,
+            sequenceNumber,
+            subSequenceNumber);
       } else {
         // sequenceNumber was never updated for this shard,
         // fall back to its init checkpoint

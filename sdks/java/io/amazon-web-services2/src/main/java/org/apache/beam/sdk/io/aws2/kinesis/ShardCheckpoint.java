@@ -152,6 +152,23 @@ class ShardCheckpoint implements Serializable {
         shardIteratorType, streamName, shardId, sequenceNumber, subSequenceNumber);
   }
 
+  /**
+   * Returns new iterator using the ack-ed checkpoint.
+   *
+   * <p>Note that {@link #checkpointIsInTheMiddleOfAUserRecord} is always true for cases when at
+   * least one record was ack-ed. {@link #sequenceNumber} will be never null, and only {@link
+   * ShardIteratorType#AFTER_SEQUENCE_NUMBER} is checkpoint-ed.
+   *
+   * <p>This means that iterator will always deliver some redundant records in the beginning, which
+   * are for {@link RecordFilter} to deal with.
+   *
+   * <p>{@link ShardIteratorType#AT_SEQUENCE_NUMBER} may look more "consistent", but it would not
+   * actually work in some cases: TODO describe
+   *
+   * @param kinesisClient
+   * @return
+   * @throws TransientKinesisException
+   */
   public String getShardIterator(SimplifiedKinesisClient kinesisClient)
       throws TransientKinesisException {
     if (checkpointIsInTheMiddleOfAUserRecord()) {
@@ -168,6 +185,9 @@ class ShardCheckpoint implements Serializable {
 
   /**
    * Used to advance checkpoint mark to position after given {@link Record}.
+   *
+   * <p>Note that only {@link ShardIteratorType#AFTER_SEQUENCE_NUMBER} is persisted, as soon as
+   * {@link #moveAfter(KinesisRecord)} called at least once.
    *
    * @param record
    * @return new checkpoint object pointing directly after given {@link Record}
@@ -189,14 +209,28 @@ class ShardCheckpoint implements Serializable {
     return shardId;
   }
 
-  StartingPosition toStartingPosition() {
+  /**
+   * Converts stored checkpoint into start position.
+   *
+   * <p>It follows the semantics of {@link #getShardIterator(SimplifiedKinesisClient)} which
+   * effectively forces {@link ShardIteratorType#AT_SEQUENCE_NUMBER} for fetching first batch, all
+   * the time.
+   *
+   * <p>{@link #moveAfter(KinesisRecord)} never stores {@link ShardIteratorType#AT_SEQUENCE_NUMBER}
+   * and, instead, relies on {@link RecordFilter} to drop first redundant de-aggregated records or
+   * entire batch of de-aggregated or "normal" records.
+   */
+  StartingPosition toEFOStartingPosition() {
     StartingPosition.Builder builder = StartingPosition.builder().type(shardIteratorType);
     switch (shardIteratorType) {
       case AT_TIMESTAMP:
         return builder.timestamp(TimeUtil.toJava(checkNotNull(timestamp))).build();
       case AT_SEQUENCE_NUMBER:
       case AFTER_SEQUENCE_NUMBER:
-        return builder.sequenceNumber(checkNotNull(sequenceNumber)).build();
+        return StartingPosition.builder()
+            .type(AT_SEQUENCE_NUMBER)
+            .sequenceNumber(checkNotNull(sequenceNumber))
+            .build();
 
       default:
         return builder.build();
