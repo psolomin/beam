@@ -17,9 +17,9 @@
  */
 package org.apache.beam.sdk.io.aws2.kinesis;
 
-import static org.apache.beam.sdk.io.aws2.kinesis.KinesisIOReadTest.mockRecords;
-import static org.apache.beam.sdk.io.aws2.kinesis.KinesisIOReadTest.mockShardIterators;
-import static org.apache.beam.sdk.io.aws2.kinesis.KinesisIOReadTest.testRecords;
+import static org.apache.beam.sdk.io.aws2.kinesis.Helpers.mockRecords;
+import static org.apache.beam.sdk.io.aws2.kinesis.Helpers.mockShardIterators;
+import static org.apache.beam.sdk.io.aws2.kinesis.Helpers.testRecords;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
