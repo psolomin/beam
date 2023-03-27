@@ -104,9 +104,29 @@ class Helpers {
     return range(0, shards).boxed().map(dataStream).collect(toList());
   }
 
+  static List<List<Record>> testAggregatedRecords(int shards, int events) {
+    final Instant now = DateTime.now().toInstant();
+    Function<Integer, List<Record>> dataStream =
+        shard -> {
+          RecordsAggregator aggregator = new RecordsAggregator(1024, new org.joda.time.Instant());
+          List<Record> records =
+              range(0, events).mapToObj(off -> record(now, shard, off)).collect(toList());
+          for (Record record : records) {
+            aggregator.addRecord(record.partitionKey(), null, record.data().asByteArray());
+          }
+          return ImmutableList.of(recordWithCustomPayload(now, shard, 0, aggregator.toBytes()));
+        };
+    return range(0, shards).boxed().map(dataStream).collect(toList());
+  }
+
   static Record record(Instant now, int shard, int offset) {
     String seqNum = Integer.toString(shard * SHARD_EVENTS + offset);
     return record(now.plus(standardSeconds(offset)), seqNum.getBytes(UTF_8), seqNum);
+  }
+
+  static Record recordWithCustomPayload(Instant now, int shard, int offset, byte[] payload) {
+    String seqNum = Integer.toString(shard * SHARD_EVENTS + offset);
+    return record(now.plus(standardSeconds(offset)), payload, seqNum);
   }
 
   static Record record(Instant arrival, byte[] data, String seqNum) {

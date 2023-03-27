@@ -19,8 +19,11 @@ package org.apache.beam.sdk.io.aws2.kinesis;
 
 import static org.apache.beam.sdk.io.aws2.kinesis.Helpers.mockRecords;
 import static org.apache.beam.sdk.io.aws2.kinesis.Helpers.mockShardIterators;
+import static org.apache.beam.sdk.io.aws2.kinesis.Helpers.testAggregatedRecords;
 import static org.apache.beam.sdk.io.aws2.kinesis.Helpers.testRecords;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.util.List;
 import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.ImmutableList;
@@ -46,27 +49,23 @@ public class ShardReadersPoolExtendedTest {
   @Mock private KinesisClient kinesis;
   @Mock private CloudWatchClient cloudWatch;
   private ShardReadersPool shardReadersPool;
+  private SimplifiedKinesisClient simplifiedKinesisClient;
 
   @Before
   public void setUp() {
-    SimplifiedKinesisClient simplifiedKinesisClient =
+    simplifiedKinesisClient =
         new SimplifiedKinesisClient(() -> kinesis, () -> cloudWatch, GET_RECORDS_LIMIT);
+  }
 
-    KinesisIO.Read readSpec =
-        KinesisIO.read()
-            .withStreamName(STREAM)
-            .withInitialPositionInStream(InitialPositionInStream.TRIM_HORIZON);
-
+  @Test
+  public void testNextRecordReturnsRecords() throws TransientKinesisException {
     KinesisReaderCheckpoint initialCheckpoint =
         new KinesisReaderCheckpoint(
             ImmutableList.of(
                 new ShardCheckpoint(
                     STREAM, SHARD_0, ShardIteratorType.AFTER_SEQUENCE_NUMBER, "0", 0L)));
-    shardReadersPool = new ShardReadersPool(readSpec, simplifiedKinesisClient, initialCheckpoint);
-  }
+    shardReadersPool = initPool(initialCheckpoint);
 
-  @Test
-  public void testNextRecordReturnsRecords() throws TransientKinesisException {
     List<List<Record>> records = testRecords(1, 3);
     mockShardIterators(kinesis, records);
     mockRecords(kinesis, records, 3);
@@ -79,7 +78,7 @@ public class ShardReadersPoolExtendedTest {
         .containsExactlyInAnyOrder(
             new ShardCheckpoint(STREAM, SHARD_0, ShardIteratorType.AFTER_SEQUENCE_NUMBER, "0", 0L));
 
-    // first record - record with seq num = 0 is skipped:
+    // record with seq num = 0 is skipped:
     CustomOptional<KinesisRecord> record1 = shardReadersPool.nextRecord();
     assertThat(record1.isPresent()).isTrue();
     assertThat(record1.get().getSequenceNumber()).isEqualTo("1");
@@ -101,8 +100,66 @@ public class ShardReadersPoolExtendedTest {
     assertThat(shardReadersPool.nextRecord().isPresent()).isFalse();
   }
 
-  @After
-  public void clean() {
+  @Test
+  public void testNextRecordReturnsDeAggregatedRecords() throws TransientKinesisException {
+    KinesisReaderCheckpoint initialCheckpoint =
+        new KinesisReaderCheckpoint(
+            ImmutableList.of(
+                new ShardCheckpoint(
+                    STREAM, SHARD_0, new StartingPoint(InitialPositionInStream.LATEST))));
+    shardReadersPool = initPool(initialCheckpoint);
+
+    List<List<Record>> records = testAggregatedRecords(1, 6);
+    mockShardIterators(kinesis, records);
+    mockRecords(kinesis, records, 1);
+
+    shardReadersPool.start();
+
+    // before fetching anything:
+    KinesisReaderCheckpoint checkpoint0 = shardReadersPool.getCheckpointMark();
+    assertThat(checkpoint0.iterator())
+        .containsExactlyInAnyOrder(
+            new ShardCheckpoint(
+                STREAM, SHARD_0, new StartingPoint(InitialPositionInStream.LATEST)));
+
+    // check first 3 records
+    KinesisReaderCheckpoint intermediateCheckpoint = null;
+    for (long i = 0; i < 3L; i++) {
+      KinesisRecord kinesisRecord = shardReadersPool.nextRecord().get();
+      assertThat(kinesisRecord.getSequenceNumber()).isEqualTo("0");
+      assertThat(kinesisRecord.getSubSequenceNumber()).isEqualTo(i);
+      intermediateCheckpoint = shardReadersPool.getCheckpointMark();
+      assertThat(intermediateCheckpoint.iterator())
+          .containsExactlyInAnyOrder(
+              new ShardCheckpoint(
+                  STREAM, SHARD_0, ShardIteratorType.AFTER_SEQUENCE_NUMBER, "0", i));
+    }
+
+    // re-initialize pool from the previous checkpoint
     shardReadersPool.stop();
+    shardReadersPool = initPool(intermediateCheckpoint);
+    shardReadersPool.start();
+
+    // 4th record:
+    CustomOptional<KinesisRecord> record4 = shardReadersPool.nextRecord();
+    assertThat(record4.isPresent()).isTrue();
+    assertThat(record4.get().getSequenceNumber()).isEqualTo("0");
+    assertThat(record4.get().getSubSequenceNumber()).isEqualTo(3L);
+  }
+
+  @After
+  public void clean() throws Exception {
+    shardReadersPool.stop();
+    simplifiedKinesisClient.close();
+    verify(kinesis).close();
+    verifyNoInteractions(cloudWatch);
+  }
+
+  private static KinesisIO.Read spec() {
+    return KinesisIO.read().withStreamName(STREAM);
+  }
+
+  private ShardReadersPool initPool(KinesisReaderCheckpoint initialCheckpoint) {
+    return new ShardReadersPool(spec(), simplifiedKinesisClient, initialCheckpoint);
   }
 }
