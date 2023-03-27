@@ -85,7 +85,7 @@ public class ShardReadersPoolExtendedTest {
     KinesisReaderCheckpoint checkpoint1 = shardReadersPool.getCheckpointMark();
     assertThat(checkpoint1.iterator())
         .containsExactlyInAnyOrder(
-            new ShardCheckpoint(STREAM, SHARD_0, ShardIteratorType.AFTER_SEQUENCE_NUMBER, "1", 0L));
+            new ShardCheckpoint(STREAM, SHARD_0, ShardIteratorType.AT_SEQUENCE_NUMBER, "1", 0L));
 
     // second record:
     CustomOptional<KinesisRecord> record2 = shardReadersPool.nextRecord();
@@ -94,7 +94,7 @@ public class ShardReadersPoolExtendedTest {
     KinesisReaderCheckpoint checkpoint2 = shardReadersPool.getCheckpointMark();
     assertThat(checkpoint2.iterator())
         .containsExactlyInAnyOrder(
-            new ShardCheckpoint(STREAM, SHARD_0, ShardIteratorType.AFTER_SEQUENCE_NUMBER, "2", 0L));
+            new ShardCheckpoint(STREAM, SHARD_0, ShardIteratorType.AT_SEQUENCE_NUMBER, "2", 0L));
 
     // nothing else to fetch:
     assertThat(shardReadersPool.nextRecord().isPresent()).isFalse();
@@ -131,8 +131,7 @@ public class ShardReadersPoolExtendedTest {
       intermediateCheckpoint = shardReadersPool.getCheckpointMark();
       assertThat(intermediateCheckpoint.iterator())
           .containsExactlyInAnyOrder(
-              new ShardCheckpoint(
-                  STREAM, SHARD_0, ShardIteratorType.AFTER_SEQUENCE_NUMBER, "0", i));
+              new ShardCheckpoint(STREAM, SHARD_0, ShardIteratorType.AT_SEQUENCE_NUMBER, "0", i));
     }
 
     // re-initialize pool from the previous checkpoint
@@ -172,7 +171,7 @@ public class ShardReadersPoolExtendedTest {
     CustomOptional<KinesisRecord> record4 = shardReadersPool.nextRecord();
     assertThat(record4.isPresent()).isTrue();
     assertThat(record4.get().getSequenceNumber()).isEqualTo("0");
-    assertThat(record4.get().getSubSequenceNumber()).isEqualTo(2L);
+    assertThat(record4.get().getSubSequenceNumber()).isEqualTo(3L);
   }
 
   @After

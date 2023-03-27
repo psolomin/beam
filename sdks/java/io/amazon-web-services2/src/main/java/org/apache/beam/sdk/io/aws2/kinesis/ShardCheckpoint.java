@@ -125,13 +125,13 @@ class ShardCheckpoint implements Serializable {
    * @param other
    * @return if current checkpoint mark points before or at given {@link ExtendedSequenceNumber}
    */
-  public boolean isBeforeOrAt(KinesisRecord other) {
+  public boolean isBefore(KinesisRecord other) {
     if (shardIteratorType == AT_TIMESTAMP) {
       return timestamp.compareTo(other.getApproximateArrivalTimestamp()) <= 0;
     }
     int result = extendedSequenceNumber().compareTo(other.getExtendedSequenceNumber());
     if (result == 0) {
-      return shardIteratorType == AT_SEQUENCE_NUMBER;
+      return false;
     }
     return result < 0;
   }
@@ -151,24 +151,21 @@ class ShardCheckpoint implements Serializable {
         shardIteratorType, streamName, shardId, sequenceNumber, subSequenceNumber);
   }
 
+  /**
+   * Patched to handle state of previous Beam versions.
+   *
+   * <p>It was {@link ShardIteratorType#AFTER_SEQUENCE_NUMBER} being stored all the time.
+   */
   public String getShardIterator(SimplifiedKinesisClient kinesisClient)
       throws TransientKinesisException {
-    if (checkpointIsInTheMiddleOfAUserRecord()) {
-      return kinesisClient.getShardIterator(
-          streamName, shardId, AT_SEQUENCE_NUMBER, sequenceNumber, null);
+    ShardIteratorType finalType;
+    if (shardIteratorType.equals(AFTER_SEQUENCE_NUMBER)) {
+      finalType = AT_SEQUENCE_NUMBER;
+    } else {
+      finalType = shardIteratorType;
     }
     return kinesisClient.getShardIterator(
-        streamName, shardId, shardIteratorType, sequenceNumber, timestamp);
-  }
-
-  /**
-   * Needs fixes.
-   *
-   * <p>According to {@link ExtendedSequenceNumber}, {@link #subSequenceNumber} is never null ->
-   * this method always returns true for {@link ShardIteratorType#AFTER_SEQUENCE_NUMBER}.
-   */
-  private boolean checkpointIsInTheMiddleOfAUserRecord() {
-    return shardIteratorType == AFTER_SEQUENCE_NUMBER && subSequenceNumber != null;
+        streamName, shardId, finalType, sequenceNumber, timestamp);
   }
 
   /**
@@ -188,7 +185,7 @@ class ShardCheckpoint implements Serializable {
     return new ShardCheckpoint(
         streamName,
         shardId,
-        AFTER_SEQUENCE_NUMBER,
+        AT_SEQUENCE_NUMBER,
         record.getSequenceNumber(),
         record.getSubSequenceNumber());
   }
