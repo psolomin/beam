@@ -138,6 +138,37 @@ public class ShardCheckpointTest {
         .isTrue();
   }
 
+  @Test
+  public void testEquals() {
+    assertThat(
+            new ShardCheckpoint(
+                "stream-01", "shard-000", new StartingPoint(Instant.ofEpochMilli(112))))
+        .isEqualTo(
+            new ShardCheckpoint(
+                "stream-01", "shard-000", new StartingPoint(Instant.ofEpochMilli(112))));
+
+    assertThat(
+            new ShardCheckpoint(
+                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "9", 0L))
+        .isEqualTo(
+            new ShardCheckpoint(
+                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "9", 0L));
+
+    assertThat(
+            new ShardCheckpoint(
+                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "10", 0L))
+        .isNotEqualTo(
+            new ShardCheckpoint(
+                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "9", 0L));
+
+    assertThat(
+            new ShardCheckpoint(
+                "stream-01", "shard-000", new StartingPoint(Instant.ofEpochMilli(112))))
+        .isNotEqualTo(
+            new ShardCheckpoint(
+                "stream-01", "shard-000", new StartingPoint(Instant.ofEpochMilli(113))));
+  }
+
   private KinesisRecord recordWith(ExtendedSequenceNumber extendedSequenceNumber) {
     KinesisRecord record = mock(KinesisRecord.class);
     when(record.getExtendedSequenceNumber()).thenReturn(extendedSequenceNumber);

@@ -24,6 +24,7 @@ import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AT
 import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AT_TIMESTAMP;
 
 import java.io.Serializable;
+import java.util.Objects;
 import org.joda.time.Instant;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
@@ -46,6 +47,15 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
   "nullness" // TODO(https://github.com/apache/beam/issues/20497)
 })
 class ShardCheckpoint implements Serializable {
+  /**
+   * Extracted from org.apache.beam:beam-sdks-java-io-amazon-web-services2:2.46.0.
+   *
+   * <pre>{@code
+   * serialver -classpath "..<dependencies dir>/*" \
+   *     org.apache.beam.sdk.io.aws2.kinesis.ShardCheckpoint
+   * }</pre>
+   */
+  private static final long serialVersionUID = 103536540299998471L;
 
   private final String streamName;
   private final String shardId;
@@ -137,8 +147,8 @@ class ShardCheckpoint implements Serializable {
   @Override
   public String toString() {
     return String.format(
-        "Checkpoint %s for stream %s, shard %s: %s",
-        shardIteratorType, streamName, shardId, sequenceNumber);
+        "Checkpoint %s for stream %s, shard %s: %s %s",
+        shardIteratorType, streamName, shardId, sequenceNumber, subSequenceNumber);
   }
 
   public String getShardIterator(SimplifiedKinesisClient kinesisClient)
@@ -151,12 +161,25 @@ class ShardCheckpoint implements Serializable {
         streamName, shardId, shardIteratorType, sequenceNumber, timestamp);
   }
 
+  /**
+   * Needs fixes.
+   *
+   * <p>According to {@link ExtendedSequenceNumber}, {@link #subSequenceNumber} is never null ->
+   * this method always returns true for {@link ShardIteratorType#AFTER_SEQUENCE_NUMBER}.
+   */
   private boolean checkpointIsInTheMiddleOfAUserRecord() {
     return shardIteratorType == AFTER_SEQUENCE_NUMBER && subSequenceNumber != null;
   }
 
   /**
-   * Used to advance checkpoint mark to position after given {@link Record}.
+   * Needs fixes.
+   *
+   * <p>Used to advance checkpoint mark to position after given {@link Record}.
+   *
+   * <p>{@link KinesisReader} is never started with a concrete sequence number, unless it's restored
+   * from a checkpoint-ed state. This effectively means that aggregated records move the checkpoint
+   * forward to {@link ShardIteratorType#AFTER_SEQUENCE_NUMBER} while it should be {@link
+   * ShardIteratorType#AT_SEQUENCE_NUMBER} instead.
    *
    * @param record
    * @return new checkpoint object pointing directly after given {@link Record}
@@ -176,5 +199,28 @@ class ShardCheckpoint implements Serializable {
 
   public String getShardId() {
     return shardId;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    ShardCheckpoint that = (ShardCheckpoint) o;
+    return streamName.equals(that.streamName)
+        && shardId.equals(that.shardId)
+        && Objects.equals(sequenceNumber, that.sequenceNumber)
+        && shardIteratorType == that.shardIteratorType
+        && Objects.equals(subSequenceNumber, that.subSequenceNumber)
+        && Objects.equals(timestamp, that.timestamp);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(
+        streamName, shardId, sequenceNumber, shardIteratorType, subSequenceNumber, timestamp);
   }
 }

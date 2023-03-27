@@ -25,6 +25,7 @@ import org.apache.commons.lang.builder.EqualsBuilder;
 import org.apache.commons.lang.builder.ToStringBuilder;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joda.time.Instant;
+import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
@@ -43,6 +44,14 @@ public class KinesisRecord {
   private ByteBuffer data;
   private String partitionKey;
 
+  /**
+   * Storing the result of {@link KinesisClientRecord#aggregated()} is missing.
+   *
+   * <p>{@link ShardCheckpoint#moveAfter(KinesisRecord)} can't distinguish between aggregated and
+   * non-aggregated records, and {@link ShardCheckpoint#getShardIterator(SimplifiedKinesisClient)}
+   * as a result must always start from {@link ShardIteratorType#AT_SEQUENCE_NUMBER} and rely on
+   * {@link RecordFilter} to drop always-present first record.
+   */
   public KinesisRecord(KinesisClientRecord record, String streamName, String shardId) {
     this(
         record.data(),
