@@ -63,14 +63,14 @@ public class ShardRecordsIteratorTest {
     when(firstCheckpoint.getStreamName()).thenReturn(STREAM_NAME);
     when(firstCheckpoint.getShardId()).thenReturn(SHARD_ID);
 
-    when(firstCheckpoint.moveAfter(a)).thenReturn(aCheckpoint);
-    when(aCheckpoint.moveAfter(b)).thenReturn(bCheckpoint);
+    when(firstCheckpoint.moveAt(a)).thenReturn(aCheckpoint);
+    when(aCheckpoint.moveAt(b)).thenReturn(bCheckpoint);
     when(aCheckpoint.getStreamName()).thenReturn(STREAM_NAME);
     when(aCheckpoint.getShardId()).thenReturn(SHARD_ID);
-    when(bCheckpoint.moveAfter(c)).thenReturn(cCheckpoint);
+    when(bCheckpoint.moveAt(c)).thenReturn(cCheckpoint);
     when(bCheckpoint.getStreamName()).thenReturn(STREAM_NAME);
     when(bCheckpoint.getShardId()).thenReturn(SHARD_ID);
-    when(cCheckpoint.moveAfter(d)).thenReturn(dCheckpoint);
+    when(cCheckpoint.moveAt(d)).thenReturn(dCheckpoint);
     when(cCheckpoint.getStreamName()).thenReturn(STREAM_NAME);
     when(cCheckpoint.getShardId()).thenReturn(SHARD_ID);
     when(dCheckpoint.getStreamName()).thenReturn(STREAM_NAME);

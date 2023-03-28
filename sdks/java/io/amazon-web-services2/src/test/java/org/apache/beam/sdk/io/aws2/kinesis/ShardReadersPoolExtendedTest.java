@@ -63,6 +63,41 @@ public class ShardReadersPoolExtendedTest {
         new KinesisReaderCheckpoint(
             ImmutableList.of(
                 new ShardCheckpoint(
+                    STREAM, SHARD_0, ShardIteratorType.AT_SEQUENCE_NUMBER, "0", 0L)));
+    shardReadersPool = initPool(initialCheckpoint);
+
+    List<List<Record>> records = testRecords(1, 3);
+    mockShardIterators(kinesis, records);
+    mockRecords(kinesis, records, 3);
+
+    shardReadersPool.start();
+
+    // before fetching anything:
+    KinesisReaderCheckpoint checkpoint0 = shardReadersPool.getCheckpointMark();
+    assertThat(checkpoint0.iterator())
+        .containsExactlyInAnyOrder(
+            new ShardCheckpoint(STREAM, SHARD_0, ShardIteratorType.AT_SEQUENCE_NUMBER, "0", 0L));
+
+    // record with seq num = 0 is skipped
+    for (int i = 1; i < 3L; i++) {
+      KinesisRecord kinesisRecord = shardReadersPool.nextRecord().get();
+      assertThat(kinesisRecord.getSequenceNumber()).isEqualTo(String.valueOf(i));
+      assertThat(kinesisRecord.getSubSequenceNumber()).isEqualTo(0L);
+      assertThat(shardReadersPool.getCheckpointMark())
+          .containsExactlyInAnyOrder(
+              new ShardCheckpoint(
+                  STREAM, SHARD_0, ShardIteratorType.AT_SEQUENCE_NUMBER, String.valueOf(i), 0L));
+    }
+    assertThat(shardReadersPool.nextRecord().isPresent()).isFalse();
+  }
+
+  @Test
+  public void testNextRecordReturnsRecordsWhenCheckpointIsLegacy()
+      throws TransientKinesisException {
+    KinesisReaderCheckpoint initialCheckpoint =
+        new KinesisReaderCheckpoint(
+            ImmutableList.of(
+                new ShardCheckpoint(
                     STREAM, SHARD_0, ShardIteratorType.AFTER_SEQUENCE_NUMBER, "0", 0L)));
     shardReadersPool = initPool(initialCheckpoint);
 
@@ -84,9 +119,9 @@ public class ShardReadersPoolExtendedTest {
       assertThat(kinesisRecord.getSequenceNumber()).isEqualTo(String.valueOf(i));
       assertThat(kinesisRecord.getSubSequenceNumber()).isEqualTo(0L);
       assertThat(shardReadersPool.getCheckpointMark())
-              .containsExactlyInAnyOrder(
-                      new ShardCheckpoint(
-                              STREAM, SHARD_0, ShardIteratorType.AFTER_SEQUENCE_NUMBER, String.valueOf(i), 0L));
+          .containsExactlyInAnyOrder(
+              new ShardCheckpoint(
+                  STREAM, SHARD_0, ShardIteratorType.AT_SEQUENCE_NUMBER, String.valueOf(i), 0L));
     }
     assertThat(shardReadersPool.nextRecord().isPresent()).isFalse();
   }
@@ -106,7 +141,7 @@ public class ShardReadersPoolExtendedTest {
         new KinesisReaderCheckpoint(
             ImmutableList.of(
                 new ShardCheckpoint(
-                    STREAM, SHARD_0, ShardIteratorType.AFTER_SEQUENCE_NUMBER, "0", 125L)));
+                    STREAM, SHARD_0, ShardIteratorType.AT_SEQUENCE_NUMBER, "0", 125L)));
     shardReadersPool = initPool(initialCheckpoint);
 
     List<List<Record>> records = testRecords(1, 4);
@@ -122,7 +157,7 @@ public class ShardReadersPoolExtendedTest {
       assertThat(shardReadersPool.getCheckpointMark())
           .containsExactlyInAnyOrder(
               new ShardCheckpoint(
-                  STREAM, SHARD_0, ShardIteratorType.AFTER_SEQUENCE_NUMBER, String.valueOf(i), 0L));
+                  STREAM, SHARD_0, ShardIteratorType.AT_SEQUENCE_NUMBER, String.valueOf(i), 0L));
     }
     assertThat(shardReadersPool.nextRecord().isPresent()).isFalse();
   }
@@ -158,8 +193,7 @@ public class ShardReadersPoolExtendedTest {
       intermediateCheckpoint = shardReadersPool.getCheckpointMark();
       assertThat(intermediateCheckpoint.iterator())
           .containsExactlyInAnyOrder(
-              new ShardCheckpoint(
-                  STREAM, SHARD_0, ShardIteratorType.AFTER_SEQUENCE_NUMBER, "0", i));
+              new ShardCheckpoint(STREAM, SHARD_0, ShardIteratorType.AT_SEQUENCE_NUMBER, "0", i));
     }
 
     // re-initialize pool from the previous checkpoint
@@ -199,7 +233,7 @@ public class ShardReadersPoolExtendedTest {
     CustomOptional<KinesisRecord> record4 = shardReadersPool.nextRecord();
     assertThat(record4.isPresent()).isTrue();
     assertThat(record4.get().getSequenceNumber()).isEqualTo("0");
-    assertThat(record4.get().getSubSequenceNumber()).isEqualTo(2L);
+    assertThat(record4.get().getSubSequenceNumber()).isEqualTo(3L);
   }
 
   @After

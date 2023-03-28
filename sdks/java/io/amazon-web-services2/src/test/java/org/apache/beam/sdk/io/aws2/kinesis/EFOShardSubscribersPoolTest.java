@@ -104,9 +104,9 @@ public class EFOShardSubscribersPoolTest {
     assertThat(pool.getCheckpointMark().iterator())
         .containsExactlyInAnyOrder(
             new ShardCheckpoint(
-                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "12", 0L),
+                "stream-01", "shard-000", ShardIteratorType.AT_SEQUENCE_NUMBER, "12", 0L),
             new ShardCheckpoint(
-                "stream-01", "shard-001", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "10", 0L));
+                "stream-01", "shard-001", ShardIteratorType.AT_SEQUENCE_NUMBER, "10", 0L));
   }
 
   /**
@@ -143,9 +143,9 @@ public class EFOShardSubscribersPoolTest {
     assertThat(pool.getCheckpointMark().iterator())
         .containsExactlyInAnyOrder(
             new ShardCheckpoint(
-                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "320", 0L),
+                "stream-01", "shard-000", ShardIteratorType.AT_SEQUENCE_NUMBER, "320", 0L),
             new ShardCheckpoint(
-                "stream-01", "shard-001", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "277", 0L));
+                "stream-01", "shard-001", ShardIteratorType.AT_SEQUENCE_NUMBER, "277", 0L));
   }
 
   @Test
@@ -177,9 +177,9 @@ public class EFOShardSubscribersPoolTest {
     assertThat(pool.getCheckpointMark().iterator())
         .containsExactlyInAnyOrder(
             new ShardCheckpoint(
-                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "13", 1L),
+                "stream-01", "shard-000", ShardIteratorType.AT_SEQUENCE_NUMBER, "13", 1L),
             new ShardCheckpoint(
-                "stream-01", "shard-001", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "56", 2L));
+                "stream-01", "shard-001", ShardIteratorType.AT_SEQUENCE_NUMBER, "56", 2L));
   }
 
   @Test
@@ -198,7 +198,7 @@ public class EFOShardSubscribersPoolTest {
     assertThat(pool.getCheckpointMark().iterator())
         .containsExactlyInAnyOrder(
             new ShardCheckpoint(
-                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "12", 0L));
+                "stream-01", "shard-000", ShardIteratorType.AT_SEQUENCE_NUMBER, "12", 0L));
 
     actualRecords = waitForRecords(pool, 3);
     validateRecords(actualRecords, 3, new String[] {"12", "12", "12"}, new Long[] {1L, 2L, 3L});
@@ -206,7 +206,7 @@ public class EFOShardSubscribersPoolTest {
     assertThat(checkpoint.iterator())
         .containsExactlyInAnyOrder(
             new ShardCheckpoint(
-                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "12", 3L));
+                "stream-01", "shard-000", ShardIteratorType.AT_SEQUENCE_NUMBER, "12", 3L));
     pool.stop();
     kinesis.close();
 
@@ -227,18 +227,66 @@ public class EFOShardSubscribersPoolTest {
     assertThat(pool.getCheckpointMark().iterator())
         .containsExactlyInAnyOrder(
             new ShardCheckpoint(
-                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "12", 5L));
+                "stream-01", "shard-000", ShardIteratorType.AT_SEQUENCE_NUMBER, "12", 5L));
 
     // nothing else comes in
     assertThat(waitForRecords(pool, 3).size()).isEqualTo(0);
     assertThat(pool.getCheckpointMark().iterator())
         .containsExactlyInAnyOrder(
             new ShardCheckpoint(
-                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "12", 5L));
+                "stream-01", "shard-000", ShardIteratorType.AT_SEQUENCE_NUMBER, "12", 5L));
+  }
+
+  @Test
+  public void consumesTailOfAggregatedRecordWhenCheckpointIsLegacy() throws Exception {
+    kinesis = new EFOStubbedKinesisAsyncClient(10);
+    SubscribeToShardEvent eventWithAggRecords = eventWithAggRecords(12, 6);
+    kinesis.stubSubscribeToShard("shard-000", eventWithAggRecords);
+
+    KinesisReaderCheckpoint initialCheckpoint =
+        new KinesisReaderCheckpoint(
+            ImmutableList.of(
+                new ShardCheckpoint(
+                    "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "12", 3L)));
+    pool = new EFOShardSubscribersPool(readSpec, consumerArn, kinesis);
+    pool.start(initialCheckpoint);
+
+    List<KinesisRecord> actualRecords = waitForRecords(pool, 10);
+    validateRecords(
+        actualRecords,
+        2,
+        new String[] {"12", "12"},
+        new Long[] {4L, 5L} // 0L, 1L, 2L, 3L were consumed and checkpoint-ed before
+        );
+    assertThat(actualRecords.size()).isEqualTo(2);
+    assertThat(kinesis.subscribeRequestsSeen())
+        .containsExactlyInAnyOrder(
+            subscribeAtSeqNumber("shard-000", "12"), subscribeAfterSeqNumber("shard-000", "12"));
   }
 
   @Test
   public void skipsEntireAggregatedBatch() throws Exception {
+    kinesis = new EFOStubbedKinesisAsyncClient(10);
+    SubscribeToShardEvent eventWithAggRecords = eventWithAggRecords(12, 6);
+    kinesis.stubSubscribeToShard("shard-000", eventWithAggRecords);
+
+    KinesisReaderCheckpoint initialCheckpoint =
+        new KinesisReaderCheckpoint(
+            ImmutableList.of(
+                new ShardCheckpoint(
+                    "stream-01", "shard-000", ShardIteratorType.AT_SEQUENCE_NUMBER, "12", 5L)));
+    pool = new EFOShardSubscribersPool(readSpec, consumerArn, kinesis);
+    pool.start(initialCheckpoint);
+
+    List<KinesisRecord> actualRecords = waitForRecords(pool, 10);
+    assertThat(actualRecords.size()).isEqualTo(0);
+    assertThat(kinesis.subscribeRequestsSeen())
+        .containsExactlyInAnyOrder(
+            subscribeAtSeqNumber("shard-000", "12"), subscribeAfterSeqNumber("shard-000", "12"));
+  }
+
+  @Test
+  public void skipsEntireAggregatedBatchWhenCheckpointIsLegacy() throws Exception {
     kinesis = new EFOStubbedKinesisAsyncClient(10);
     SubscribeToShardEvent eventWithAggRecords = eventWithAggRecords(12, 6);
     kinesis.stubSubscribeToShard("shard-000", eventWithAggRecords);
@@ -282,9 +330,9 @@ public class EFOShardSubscribersPoolTest {
     List<ShardCheckpoint> expectedCheckPoint =
         ImmutableList.of(
             new ShardCheckpoint(
-                "stream-01", "shard-001", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "10", 0L),
+                "stream-01", "shard-001", ShardIteratorType.AT_SEQUENCE_NUMBER, "10", 0L),
             new ShardCheckpoint(
-                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "33", 0L));
+                "stream-01", "shard-000", ShardIteratorType.AT_SEQUENCE_NUMBER, "33", 0L));
     KinesisReaderCheckpoint actualCheckPoint = pool.getCheckpointMark();
     assertEquals(expectedCheckPoint, ImmutableList.copyOf(actualCheckPoint.iterator()));
   }
@@ -327,18 +375,18 @@ public class EFOShardSubscribersPoolTest {
     assertThat(pool.getCheckpointMark().iterator())
         .containsExactlyInAnyOrder(
             new ShardCheckpoint(
-                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "12", 0L),
+                "stream-01", "shard-000", ShardIteratorType.AT_SEQUENCE_NUMBER, "12", 0L),
             new ShardCheckpoint(
-                "stream-01", "shard-001", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "10", 0L));
+                "stream-01", "shard-001", ShardIteratorType.AT_SEQUENCE_NUMBER, "10", 0L));
 
     assertThat(waitForRecords(pool, 1)).isEmpty(); // no more records
 
     assertThat(pool.getCheckpointMark().iterator())
         .containsExactlyInAnyOrder(
             new ShardCheckpoint(
-                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "12", 0L),
+                "stream-01", "shard-000", ShardIteratorType.AT_SEQUENCE_NUMBER, "12", 0L),
             new ShardCheckpoint(
-                "stream-01", "shard-001", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "10", 0L));
+                "stream-01", "shard-001", ShardIteratorType.AT_SEQUENCE_NUMBER, "10", 0L));
   }
 
   @Test
@@ -372,9 +420,9 @@ public class EFOShardSubscribersPoolTest {
     assertThat(pool.getCheckpointMark().iterator())
         .containsExactlyInAnyOrder(
             new ShardCheckpoint(
-                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "252", 0L),
+                "stream-01", "shard-000", ShardIteratorType.AT_SEQUENCE_NUMBER, "252", 0L),
             new ShardCheckpoint(
-                "stream-01", "shard-001", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "585", 0L));
+                "stream-01", "shard-001", ShardIteratorType.AT_SEQUENCE_NUMBER, "585", 0L));
   }
 
   @Test
@@ -401,7 +449,7 @@ public class EFOShardSubscribersPoolTest {
     assertThat(pool.getCheckpointMark().iterator())
         .containsExactlyInAnyOrder(
             new ShardCheckpoint(
-                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "553", 0L));
+                "stream-01", "shard-000", ShardIteratorType.AT_SEQUENCE_NUMBER, "553", 0L));
   }
 
   @Test
@@ -432,7 +480,7 @@ public class EFOShardSubscribersPoolTest {
     assertThat(pool.getCheckpointMark())
         .contains(
             new ShardCheckpoint(
-                "stream-01", "shard-000", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "9", 0L))
+                "stream-01", "shard-000", ShardIteratorType.AT_SEQUENCE_NUMBER, "9", 0L))
         .doesNotContain(
             new ShardCheckpoint(
                 "stream-01", "shard-001", new StartingPoint(InitialPositionInStream.LATEST)));
@@ -533,11 +581,11 @@ public class EFOShardSubscribersPoolTest {
     assertThat(pool.getCheckpointMark().iterator())
         .containsExactlyInAnyOrder(
             new ShardCheckpoint(
-                "stream-01", "shard-002", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "7", 0L),
+                "stream-01", "shard-002", ShardIteratorType.AT_SEQUENCE_NUMBER, "7", 0L),
             new ShardCheckpoint(
-                "stream-01", "shard-003", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "8", 0L),
+                "stream-01", "shard-003", ShardIteratorType.AT_SEQUENCE_NUMBER, "8", 0L),
             new ShardCheckpoint(
-                "stream-01", "shard-004", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "6", 0L));
+                "stream-01", "shard-004", ShardIteratorType.AT_SEQUENCE_NUMBER, "6", 0L));
   }
 
   @Test
@@ -607,9 +655,9 @@ public class EFOShardSubscribersPoolTest {
     assertThat(pool.getCheckpointMark().iterator())
         .containsExactlyInAnyOrder(
             new ShardCheckpoint(
-                "stream-01", "shard-005", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "8", 0L),
+                "stream-01", "shard-005", ShardIteratorType.AT_SEQUENCE_NUMBER, "8", 0L),
             new ShardCheckpoint(
-                "stream-01", "shard-004", ShardIteratorType.AFTER_SEQUENCE_NUMBER, "8", 0L));
+                "stream-01", "shard-004", ShardIteratorType.AT_SEQUENCE_NUMBER, "8", 0L));
   }
 
   @Test

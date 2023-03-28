@@ -32,7 +32,7 @@ class RecordFilter {
   public List<KinesisRecord> apply(List<KinesisRecord> records, ShardCheckpoint checkpoint) {
     List<KinesisRecord> filteredRecords = newArrayList();
     for (KinesisRecord record : records) {
-      if (checkpoint.isBeforeOrAt(record)) {
+      if (checkpoint.isBefore(record)) {
         filteredRecords.add(record);
       }
     }

@@ -113,7 +113,7 @@ class ShardRecordsIterator {
   }
 
   void ackRecord(KinesisRecord record) {
-    checkpoint.set(checkpoint.get().moveAfter(record));
+    checkpoint.set(checkpoint.get().moveAt(record));
     watermarkPolicy.update(record);
     latestRecordTimestampPolicy.update(record);
   }

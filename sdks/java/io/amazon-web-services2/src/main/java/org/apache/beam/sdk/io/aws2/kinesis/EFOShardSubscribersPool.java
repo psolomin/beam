@@ -376,16 +376,19 @@ class EFOShardSubscribersPool {
     }
 
     /**
-     * Follows semantics of {@link ShardCheckpoint#moveAfter(KinesisRecord)}, e.g. it will always
-     * persist {@link ShardIteratorType#AFTER_SEQUENCE_NUMBER} as soon as some record gets its
-     * {@link #sequenceNumber} registered.
+     * Follows semantics of {@link ShardCheckpoint#moveAt(KinesisRecord)}, e.g. it will always
+     * persist {@link ShardIteratorType#AT_SEQUENCE_NUMBER} as soon as some record gets its {@link
+     * #sequenceNumber} registered.
+     *
+     * <p>Redundant records are consumed and filtered out by {@link
+     * #recordWasNotCheckPointedYet(KinesisRecord)}.
      */
     ShardCheckpoint toCheckpoint() {
       if (sequenceNumber != null) {
         return new ShardCheckpoint(
             initCheckpoint.getStreamName(),
             initCheckpoint.getShardId(),
-            ShardIteratorType.AFTER_SEQUENCE_NUMBER,
+            ShardIteratorType.AT_SEQUENCE_NUMBER,
             sequenceNumber,
             subSequenceNumber);
       } else {
@@ -395,12 +398,8 @@ class EFOShardSubscribersPool {
       }
     }
 
-    /**
-     * FIXME: needed is-before semantic. Why {@link ShardReadersPool} did it like this? This
-     * currently allows 1 record duplicate.
-     */
     boolean recordWasNotCheckPointedYet(KinesisRecord r) {
-      return initCheckpoint.isBeforeOrAt(r);
+      return initCheckpoint.isBefore(r);
     }
   }
 
