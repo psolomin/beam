@@ -37,11 +37,11 @@ public class RecordFilterTest {
 
   @Test
   public void shouldFilterOutRecordsBeforeOrAtCheckpoint() {
-    when(checkpoint.isBeforeOrAt(record1)).thenReturn(false);
-    when(checkpoint.isBeforeOrAt(record2)).thenReturn(true);
-    when(checkpoint.isBeforeOrAt(record3)).thenReturn(true);
-    when(checkpoint.isBeforeOrAt(record4)).thenReturn(false);
-    when(checkpoint.isBeforeOrAt(record5)).thenReturn(true);
+    when(checkpoint.isBefore(record1)).thenReturn(false);
+    when(checkpoint.isBefore(record2)).thenReturn(true);
+    when(checkpoint.isBefore(record3)).thenReturn(true);
+    when(checkpoint.isBefore(record4)).thenReturn(false);
+    when(checkpoint.isBefore(record5)).thenReturn(true);
     List<KinesisRecord> records = Lists.newArrayList(record1, record2, record3, record4, record5);
     RecordFilter underTest = new RecordFilter();
 

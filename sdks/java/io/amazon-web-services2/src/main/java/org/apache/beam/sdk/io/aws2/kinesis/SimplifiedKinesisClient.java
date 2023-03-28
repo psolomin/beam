@@ -32,6 +32,8 @@ import org.apache.beam.vendor.guava.v26_0_jre.com.google.common.collect.Immutabl
 import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.joda.time.Minutes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkServiceException;
 import software.amazon.awssdk.core.internal.retry.SdkDefaultRetrySetting;
@@ -66,6 +68,7 @@ import software.amazon.kinesis.retrieval.KinesisClientRecord;
   "nullness" // TODO(https://github.com/apache/beam/issues/20497)
 })
 class SimplifiedKinesisClient implements AutoCloseable {
+  private static final Logger LOG = LoggerFactory.getLogger(SimplifiedKinesisClient.class);
 
   private static final String KINESIS_NAMESPACE = "AWS/Kinesis";
   private static final String INCOMING_RECORDS_METRIC = "IncomingBytes";
@@ -100,18 +103,19 @@ class SimplifiedKinesisClient implements AutoCloseable {
       final Instant timestamp)
       throws TransientKinesisException {
     return wrapExceptions(
-        () ->
-            kinesis
-                .get()
-                .getShardIterator(
-                    GetShardIteratorRequest.builder()
-                        .streamName(streamName)
-                        .shardId(shardId)
-                        .shardIteratorType(shardIteratorType)
-                        .startingSequenceNumber(startingSequenceNumber)
-                        .timestamp(TimeUtil.toJava(timestamp))
-                        .build())
-                .shardIterator());
+        () -> {
+          GetShardIteratorRequest request =
+              GetShardIteratorRequest.builder()
+                  .streamName(streamName)
+                  .shardId(shardId)
+                  .shardIteratorType(shardIteratorType)
+                  .startingSequenceNumber(startingSequenceNumber)
+                  .timestamp(TimeUtil.toJava(timestamp))
+                  .build();
+
+          LOG.info("Starting request {}", request);
+          return kinesis.get().getShardIterator(request).shardIterator();
+        });
   }
 
   public List<Shard> listShardsAtPoint(final String streamName, final StartingPoint startingPoint)
